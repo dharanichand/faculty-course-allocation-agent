@@ -1,0 +1,2 @@
+import mongoose from 'mongoose';
+const schema=new mongoose.Schema({courseId:{type:String,unique:true},courseCode:String,courseName:String,department:String,credits:Number,theoryHours:Number,labHours:Number,tutorialHours:Number,requiredExpertise:[String],requiredQualification:[String],sections:[Object],studentStrength:Number,status:{type:String,default:'open'}},{timestamps:true});export default mongoose.model('Course',schema);

@@ -1,0 +1,5 @@
+agent_tool_id,agent_id,tool_name,access_mode,resource_object
+b211f2b2-72a5-46d1-83c5-714f96a4c03d,64869f81-812f-4f8a-b205-69b003b577ce,search_faculty,READ,people.faculty
+a20fa315-35ce-48c2-be91-d3302d40be7d,64869f81-812f-4f8a-b205-69b003b577ce,search_courses,READ,curriculum.course
+6d408058-9fe3-4768-80f8-373eec79a8c5,64869f81-812f-4f8a-b205-69b003b577ce,check_workload,READ,hr.faculty_workload
+d1bbfe11-d265-4835-af46-ffe5dec0ec9c,64869f81-812f-4f8a-b205-69b003b577ce,recommend_allocation,WRITE,academics.faculty_allocation

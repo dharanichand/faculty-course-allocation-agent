@@ -1,0 +1,2 @@
+import Course from '../models/Course.js';import Allocation from '../models/Allocation.js';
+export const getAvailableCourses=async()=>Course.find({status:'open'}).lean();export const getCourseDetails=async courseId=>Course.findOne({courseId}).lean();export const getCourseRequirements=async courseId=>{const c=await getCourseDetails(courseId);return {expertise:c?.requiredExpertise||[],qualification:c?.requiredQualification||[]}};export const getCourseRequests=async courseId=>Allocation.find({courseId}).lean();

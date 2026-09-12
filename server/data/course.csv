@@ -1,0 +1,71 @@
+course_id,institution_id,owning_department_id,course_code,title,short_title,is_active
+e8eb4420-6b1c-47ab-a2ad-92eb4b391f9d,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS101,Programming Fundamentals,Programming Fundamentals,True
+66d3ca79-179a-49df-b725-d2b129c480da,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS102,Data Structures,Data Structures,True
+54020b17-e8f0-41e7-b556-cdcdb5c25c02,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS201,Object Oriented Programming,Object Oriented Programming,True
+65a20123-6465-4db9-aeb5-45ab0cea338c,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS202,Database Management Systems,Database Management Systems,True
+de388968-b2d2-4c7d-89e1-070afc287928,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS203,Computer Organization,Computer Organization,True
+0a12a382-0146-4bf0-af79-9b0936f2831d,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS204,Operating Systems,Operating Systems,True
+18786bc1-3ffe-4b6b-bc9a-845e0aee2fac,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS205,Computer Networks,Computer Networks,True
+a045f250-b649-403a-931e-a9dc00d0d9b5,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS206,Software Engineering,Software Engineering,True
+4e783a48-62f2-4b23-aabb-0d0d7465c920,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS301,Design and Analysis of Algorithms,Design and Analysis of Algor,True
+92e167e5-17d6-4ff5-af10-ae7994d4b5fe,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS302,Web Technologies,Web Technologies,True
+230c2530-4d5a-4c8a-936d-7ee3a6e488a8,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS303,Artificial Intelligence,Artificial Intelligence,True
+bc986f3a-aa7a-4a15-a967-7682c458364d,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS304,Machine Learning,Machine Learning,True
+efa29b74-2a27-4b2b-ae5b-5f81f05f348a,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS305,Cloud Computing,Cloud Computing,True
+0ad54813-4ee6-4f30-a388-640fbedc2d04,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS306,Cyber Security,Cyber Security,True
+37cb4c2f-aef7-4504-8971-cc0a49931b70,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS307,Distributed Systems,Distributed Systems,True
+1d6d956d-7c44-4f45-a68c-077480b8462b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS308,Compiler Design,Compiler Design,True
+ec3f9bf3-ab55-415f-9da9-7b105f12dc8a,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS309,Big Data Analytics,Big Data Analytics,True
+386f26c9-7e16-4c46-821c-ff340dd54d7f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,86c8b01b-dedf-4861-8f8c-1204eb171aa1,CS310,Natural Language Processing,Natural Language Processing,True
+bd120d56-3239-4075-9d8f-7559e3e8bb6b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI101,Introduction to AI,Introduction to AI,True
+9d3f12e1-ec6f-4796-b63c-ede12a3a4d03,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI102,Python for AI,Python for AI,True
+0c0ef302-8390-462a-948c-666503a9bece,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI201,Machine Learning,Machine Learning,True
+caf04fc5-9777-4909-8491-04652036cff8,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI202,Deep Learning,Deep Learning,True
+bd98f73d-3201-4243-abdd-7b94f99f616d,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI203,Computer Vision,Computer Vision,True
+b833adc1-9c34-4750-b77d-5bb3d2f07ce5,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI204,Natural Language Processing,Natural Language Processing,True
+a7f3341e-8e87-4140-937a-13da38a745b5,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI205,Reinforcement Learning,Reinforcement Learning,True
+86b60c83-b2f5-4f4c-98aa-750986eaed9e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI206,Data Mining,Data Mining,True
+6313f688-40e5-4f5f-9f02-1e92e29ac008,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI207,Generative AI,Generative AI,True
+e588959b-5ceb-4e8d-ae16-a3405a7b7c2c,e11c8eb4-1e0c-467f-8f98-796a9e24129c,b47462a1-5b6b-4294-9dc3-117c711dc720,AI208,MLOps,MLOps,True
+0de467fd-153a-42af-8f97-f1e8c3bd73aa,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC101,Electronic Devices,Electronic Devices,True
+f0db55e3-bf09-4703-9496-5794c13a4885,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC102,Digital Logic Design,Digital Logic Design,True
+dc82f1ce-1384-4738-b02d-5cb67edc2a0c,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC201,Signals and Systems,Signals and Systems,True
+5bcaa967-c15a-4f47-836a-d782d9c7228f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC202,Analog Circuits,Analog Circuits,True
+477f10a3-3877-43bf-b7e0-ed2f0e7b821e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC203,Digital Signal Processing,Digital Signal Processing,True
+b7f5ed51-2d45-4fd2-8afa-728807d1b880,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC204,Communication Systems,Communication Systems,True
+839b39e6-f860-4f30-8334-a8fdd5c01454,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC205,Microprocessors,Microprocessors,True
+021ee90a-de1f-4b88-ac45-bfed720a69c8,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC206,Embedded Systems,Embedded Systems,True
+5ba80440-e319-4801-8027-765c7bb76d3b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,26fc9393-044d-4d69-a9c0-767c33617683,EC207,VLSI Design,VLSI Design,True
+092abf6c-2338-4d32-b478-13f997d3cedc,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE101,Circuit Theory,Circuit Theory,True
+69c8c65e-20da-41f1-b797-c8d9f2f5a91b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE102,Electrical Machines,Electrical Machines,True
+61eabc1f-5572-4a1d-81a6-1b42d0d56a9b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE201,Power Systems,Power Systems,True
+9207fe5d-1bad-435b-a092-f8765c7445cb,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE202,Power Electronics,Power Electronics,True
+e1708333-2ba9-4ea6-a882-ce642a6ff845,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE203,Control Systems,Control Systems,True
+5194d557-83fa-4ec5-bac9-19a32acffd2e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE204,Renewable Energy,Renewable Energy,True
+e31a92aa-5c8e-41dd-ae19-e30b68ee3aee,e11c8eb4-1e0c-467f-8f98-796a9e24129c,1df2b133-a3ab-48c5-ad2f-319b96928c1f,EE205,Electrical Measurements,Electrical Measurements,True
+1d3568dc-19c5-4ddb-a1a6-9f9f590759cb,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME101,Engineering Mechanics,Engineering Mechanics,True
+ea928542-36d5-4b5e-a5c8-995d97d5e41c,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME102,Thermodynamics,Thermodynamics,True
+f0fdbb0f-26b3-4b2c-80f1-3292c4ff03c1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME201,Fluid Mechanics,Fluid Mechanics,True
+32c4cfc8-8679-44a6-ae49-3bb52ded986e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME202,Manufacturing Processes,Manufacturing Processes,True
+7927a6ca-a0a0-47bd-969b-f4aea8d17747,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME203,Machine Design,Machine Design,True
+75d7acfd-4a74-4cc9-8a33-45ad88fbeab7,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME204,CAD/CAM,CAD/CAM,True
+8c1b988b-2403-48b1-a13c-f2fcedf46cfe,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9fbeeee0-e407-4e7a-8062-6471011d13bb,ME205,Industrial Engineering,Industrial Engineering,True
+50584b6a-3ab7-44cd-92a0-962c90c56af8,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE101,Engineering Geology,Engineering Geology,True
+9db6db6c-c7eb-423c-9a42-9602c33d5376,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE102,Strength of Materials,Strength of Materials,True
+b6410adf-8876-4483-bf57-f62c56d97fd5,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE201,Structural Analysis,Structural Analysis,True
+025985a8-a742-4e2e-933c-e784a4f53e2d,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE202,Fluid Mechanics,Fluid Mechanics,True
+03e8357f-8173-46e8-a0af-afad9860c75a,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE203,Geotechnical Engineering,Geotechnical Engineering,True
+1735c87a-fa03-450b-962a-2f15d4409328,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE204,Transportation Engineering,Transportation Engineering,True
+1128534f-19fd-4c7e-8a6e-7fa86457c9fa,e11c8eb4-1e0c-467f-8f98-796a9e24129c,00f83339-0268-4296-a95c-71b715b267a1,CE205,Environmental Engineering,Environmental Engineering,True
+e9c6e7f7-c180-47ba-8b17-2c838661d210,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9c9396ed-93c3-4d33-bc89-3c097aecfbe2,MC101,Advanced Programming,Advanced Programming,True
+21e1b386-c780-4bda-a44b-490d302ebc25,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9c9396ed-93c3-4d33-bc89-3c097aecfbe2,MC102,Advanced DBMS,Advanced DBMS,True
+2257d642-2e42-41b0-9082-c03235ab671d,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9c9396ed-93c3-4d33-bc89-3c097aecfbe2,MC201,Advanced Web Development,Advanced Web Development,True
+d8cf4983-8bc4-4987-896d-b56140090b0f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9c9396ed-93c3-4d33-bc89-3c097aecfbe2,MC202,Data Analytics,Data Analytics,True
+287cc411-1804-41ee-a199-add7edd0dc72,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9c9396ed-93c3-4d33-bc89-3c097aecfbe2,MC203,AI Applications,AI Applications,True
+8be145fb-5122-425d-917e-3db2433e9383,e11c8eb4-1e0c-467f-8f98-796a9e24129c,9c9396ed-93c3-4d33-bc89-3c097aecfbe2,MC204,Cloud and DevOps,Cloud and DevOps,True
+ba44a39d-0016-48ba-9111-da77b1eb0bfc,e11c8eb4-1e0c-467f-8f98-796a9e24129c,81928c47-bf2a-4a49-9b66-4e3649e884c3,MB101,Principles of Management,Principles of Management,True
+60a08c28-0a5b-406e-ad19-7d32e0ee42da,e11c8eb4-1e0c-467f-8f98-796a9e24129c,81928c47-bf2a-4a49-9b66-4e3649e884c3,MB102,Financial Management,Financial Management,True
+df18fd08-34ec-49d5-8180-ab74ac793ee9,e11c8eb4-1e0c-467f-8f98-796a9e24129c,81928c47-bf2a-4a49-9b66-4e3649e884c3,MB201,Marketing Management,Marketing Management,True
+0600c358-94dd-4fda-baea-3c0553df99c5,e11c8eb4-1e0c-467f-8f98-796a9e24129c,81928c47-bf2a-4a49-9b66-4e3649e884c3,MB202,Business Analytics,Business Analytics,True
+b4b093bb-3021-4d91-b354-50e25c1210d0,e11c8eb4-1e0c-467f-8f98-796a9e24129c,81928c47-bf2a-4a49-9b66-4e3649e884c3,MB203,Human Resource Management,Human Resource Management,True
+5e13b600-d594-4e7f-972b-9c924d31ca85,e11c8eb4-1e0c-467f-8f98-796a9e24129c,81928c47-bf2a-4a49-9b66-4e3649e884c3,MB204,Operations Management,Operations Management,True

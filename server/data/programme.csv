@@ -1,0 +1,9 @@
+programme_id,institution_id,degree,name,programme_code
+36864f3f-7338-45b8-8aa9-841b967276f0,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Computer Science & Engineering,CSE
+9a4de9c5-a6df-4c8d-a29c-40a23cdeeca7,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Artificial Intelligence & Machine Learning,AIML
+a5b1cd46-f3aa-47e6-aca7-86c3c484dc9e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Electronics & Communication Engineering,ECE
+e80b66b0-2887-4198-a982-098e7b2951d1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Electrical & Electronics Engineering,EEE
+b596e39f-e01e-419f-a9a6-959ec0209866,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Mechanical Engineering,ME
+81b6c9ce-8b87-4bd8-a96a-f864f4820e56,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Civil Engineering,CE
+ca586e0e-3f8b-4f91-a893-0f644ead1c7b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MCA,Master of Computer Applications,MCA
+d34e75d8-d196-4e88-814e-2fd1a8cb2788,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MBA,Master of Business Administration,MBA

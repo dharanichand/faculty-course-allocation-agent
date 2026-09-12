@@ -1,0 +1,9 @@
+department_id,institution_id,department_code,name
+86c8b01b-dedf-4861-8f8c-1204eb171aa1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,CSE,Computer Science & Engineering
+b47462a1-5b6b-4294-9dc3-117c711dc720,e11c8eb4-1e0c-467f-8f98-796a9e24129c,AIML,Artificial Intelligence & Machine Learning
+26fc9393-044d-4d69-a9c0-767c33617683,e11c8eb4-1e0c-467f-8f98-796a9e24129c,ECE,Electronics & Communication Engineering
+1df2b133-a3ab-48c5-ad2f-319b96928c1f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,EEE,Electrical & Electronics Engineering
+9fbeeee0-e407-4e7a-8062-6471011d13bb,e11c8eb4-1e0c-467f-8f98-796a9e24129c,ME,Mechanical Engineering
+00f83339-0268-4296-a95c-71b715b267a1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,CE,Civil Engineering
+9c9396ed-93c3-4d33-bc89-3c097aecfbe2,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MCA,Master of Computer Applications
+81928c47-bf2a-4a49-9b66-4e3649e884c3,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MBA,Master of Business Administration
