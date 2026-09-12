@@ -42,27 +42,27 @@ function App(){
  useEffect(()=>{if(!sessionStorage.getItem('allocation_demo_token'))navigate('/login',{replace:true});},[]);
 
  return <div className="min-h-screen bg-transparent text-slate-700">
-  {/* Header: brand + status + profile on top, primary navigation as a pill row underneath — no sidebar. */}
-  <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
-   <div className="flex items-center px-4 sm:px-7 h-16 gap-4 max-w-[1600px] mx-auto">
-    <button type="button" onClick={()=>navigate('/')} className="flex items-center gap-3 shrink-0 cursor-hover">
-     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center shadow-glow"><Bot size={20}/></div>
-     <div className="hidden sm:block leading-tight text-left"><div className="text-[10px] font-bold tracking-widest text-blue-600 uppercase">CSE Department Presents</div><div className="font-display font-bold text-slate-900 text-base -mt-0.5">Faculty Course Allocation Agent</div></div>
+  {/* Compact single-row header: branding + navigation + health/profile controls. */}
+  <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
+   <div className="flex items-center gap-2 px-3 sm:px-5 h-[58px] max-w-[1800px] mx-auto overflow-x-auto no-scrollbar">
+    <button type="button" onClick={()=>navigate('/')} className="flex items-center gap-2 shrink-0 cursor-hover pr-2 border-r border-slate-200">
+     <img src="/branding/vignan-logo.png" alt="Vignan's" className="w-[92px] h-auto object-contain" />
+     <div className="hidden xl:block leading-tight text-left min-w-[180px]">
+      <div className="text-[8px] font-bold tracking-widest text-blue-600 uppercase">CSE Department Presents</div>
+      <div className="font-display font-bold text-slate-900 text-[13px]">Faculty Course Allocation Agent</div>
+     </div>
     </button>
-    <div className="flex-1"/>
-    <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> System healthy</div>
-    <div className="flex items-center gap-3 pl-2">
-     <div className="text-right hidden md:block"><div className="text-sm font-semibold text-slate-800">{user?.name||'Dr. Ananya Rao'}</div><div className="text-[11px] text-slate-400">{user?.role||'Head of Department'}</div></div>
-     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold text-sm shrink-0">{(user?.name||'AR').split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
-     <button onClick={()=>navigate('/settings')} title="Settings" className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600"><Settings size={18}/></button>
-     <button onClick={logout} title="Sign out" className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-600"><LogOut size={18}/></button>
+    <nav className="flex items-center gap-1 shrink-0">
+     {nav.map(n=>{const I=n.icon; return <NavLink key={n.to} to={n.to} title={n.label} className={({isActive})=>`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition whitespace-nowrap ${isActive?'bg-blue-600 text-white shadow-sm':'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}><I size={14}/><span className="hidden lg:inline">{n.label}</span></NavLink>})}
+    </nav>
+    <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-2 border-l border-slate-200">
+     <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold whitespace-nowrap"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"/> System healthy</div>
+     <div className="text-right hidden xl:block leading-tight"><div className="text-[11px] font-semibold text-slate-800">{user?.name||'Dr. Ananya Rao'}</div><div className="text-[9px] text-slate-400">{user?.role||'Head of Department'}</div></div>
+     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold text-xs shrink-0">{(user?.name||'AR').split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+     <button onClick={()=>navigate('/settings')} title="Settings" className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600"><Settings size={16}/></button>
+     <button onClick={logout} title="Sign out" className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-600"><LogOut size={16}/></button>
     </div>
    </div>
-   <nav className="border-t border-slate-100 bg-white/60">
-    <div className="flex items-center gap-1.5 px-4 sm:px-7 h-14 max-w-[1600px] mx-auto overflow-x-auto no-scrollbar">
-     {nav.map(n=>{const I=n.icon; return <NavLink key={n.to} to={n.to} className={({isActive})=>`shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition whitespace-nowrap ${isActive?'bg-blue-600 text-white shadow-glow':'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}><I size={16}/>{n.label}</NavLink>})}
-    </div>
-   </nav>
   </header>
 
   <div className="min-h-screen">
