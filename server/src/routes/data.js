@@ -5,19 +5,18 @@ import Faculty from '../models/Faculty.js';
 import Course from '../models/Course.js';
 import Conflict from '../models/Conflict.js';
 import AuditLog from '../models/AuditLog.js';
-import { allFaculty, allCourses, findFaculty, findCourse, allRequests, memoryRequests, addMemoryRequest } from '../data/store.js';
+import { memory, memoryFaculty, memoryCourses, memoryRequests } from '../data/store.js';
 
 const r = Router();
 
-const dbReady = () => mongoose.connection.readyState === 1;
+const dbReady = () => mongoose.connection.readyState === 1 && process.env.DATA_SOURCE === 'mongodb';
 const uid = (prefix) => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}`.toUpperCase();
 
-const memory = { faculty: [], courses: [], conflicts: [] };
 
 
 r.get('/faculty', auth, async (req,res) => {
   try {
-    const data = dbReady() ? await Faculty.find({ status: { $ne: 'inactive' } }).sort({name:1}).lean() : await allFaculty();
+    const data = dbReady() ? await Faculty.find({ status: { $ne: 'inactive' } }).sort({name:1}).lean() : memory.faculty;
     res.json(data);
   } catch(e) { res.status(500).json({message:e.message}); }
 });
@@ -26,8 +25,9 @@ r.post('/faculty', auth, role('hod'), async (req,res) => {
   try {
     const body = req.body || {};
     if (!body.name) return res.status(400).json({message:'Faculty name is required'});
+    if (!body.facultyId || !String(body.facultyId).trim()) return res.status(400).json({message:'Faculty ID is required'});
     const item = {
-      facultyId: body.facultyId || uid('F'),
+      facultyId: String(body.facultyId).trim(),
       name: body.name,
       department: body.department || 'CSE',
       designation: body.designation || 'Assistant Professor',
@@ -122,7 +122,7 @@ r.put('/courses/:id', auth, role('hod'), async(req,res)=>{
   try{
     const data=dbReady()
       ? await Course.findOneAndUpdate({courseId:req.params.id},{$set:req.body},{new:true,runValidators:true}).lean()
-      : Object.assign((await findCourse(req.params.id))||{},req.body);
+      : Object.assign(memory.courses.find(x=>x.courseId===req.params.id)||{},req.body);
     if(!data)return res.status(404).json({message:'Course not found'});
     res.json(data);
   }catch(e){res.status(400).json({message:e.message});}
@@ -132,7 +132,7 @@ r.delete('/courses/:id', auth, role('hod'), async(req,res)=>{
   try{
     const data=dbReady()
       ? await Course.findOneAndUpdate({courseId:req.params.id},{$set:{status:'inactive'}},{new:true}).lean()
-      : Object.assign((await findCourse(req.params.id))||{},{status:'inactive'});
+      : Object.assign(memory.courses.find(x=>x.courseId===req.params.id)||{},{status:'inactive'});
     if(!data)return res.status(404).json({message:'Course not found'});
     res.json({ok:true});
   }catch(e){res.status(400).json({message:e.message});}
@@ -179,7 +179,7 @@ r.patch('/conflicts/:id/resolve', auth, role('hod'), async(req,res)=>{
 r.get('/requests', auth, async (req,res) => {
   try {
     const Allocation = (await import('../models/Allocation.js')).default;
-    if (!dbReady()) return res.json(await allRequests());
+    if (!dbReady()) return res.json(memoryRequests);
     res.json(await Allocation.find().sort({createdAt:-1}).lean());
   } catch(e){res.status(500).json({message:e.message});}
 });
@@ -189,7 +189,7 @@ r.post('/requests', auth, async (req,res) => {
     const Allocation = (await import('../models/Allocation.js')).default;
     const b=req.body||{};
     if(!b.facultyId||!b.courseId)return res.status(400).json({message:'facultyId and courseId are required'});
-    if(!dbReady()){ const item={_id:`csv-request-${Date.now()}`,facultyId:b.facultyId,courseId:b.courseId,sectionId:b.sectionId||`${b.courseId}-A`,preferenceRank:Number(b.preferenceRank)||1,status:'pending',recommendationScore:null,recommendationReason:'New request submitted through the application.'}; await addMemoryRequest(item); return res.status(201).json(item); }
+    if(!dbReady()){ const item={_id:`demo-request-${Date.now()}`,facultyId:b.facultyId,courseId:b.courseId,sectionId:b.sectionId||`${b.courseId}-A`,preferenceRank:Number(b.preferenceRank)||1,status:'pending',recommendationScore:null}; memoryRequests.unshift(item); return res.status(201).json(item); }
     const item=await Allocation.create({facultyId:b.facultyId,courseId:b.courseId,sectionId:b.sectionId||'',status:'pending',recommendationScore:null});
     res.status(201).json(item);
   }catch(e){res.status(400).json({message:e.message});}

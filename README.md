@@ -1,60 +1,115 @@
-# Faculty Course Allocation Agent
+# Faculty Course Allocation Agent — Dataset Integrated
 
-A full-stack faculty-course allocation dashboard with React/Vite, Express, MongoDB support, deterministic allocation data, LangGraph/OpenAI agent support, and HOD human-in-the-loop approval.
+Full-stack React/Vite + Express faculty-course allocation dashboard with:
+- Large college-aligned synthetic dataset
+- Faculty/course/request/workload pages
+- Agentic AI chat with Groq/OpenAI-compatible tool calling
+- Deterministic recommendation scoring
+- What-if simulation without database mutation
+- HOD human-in-the-loop approve/reject/override
+- Conflict detection and resolution
+- Local dataset mode by default
+- Optional MongoDB persistence mode
 
-## Run locally
+## Run
 
-1. Install Node.js 18+.
-2. From the project root:
+Requirements: Node.js 18+.
+
+From the project root:
 
 ```bash
 npm run install:all
 ```
 
-3. Configure `server/.env`:
+Keep your own existing `server/.env`. Do NOT create or commit a new secrets file.
 
-```env
-PORT=5000
-MONGO_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/faculty_allocation
-JWT_SECRET=replace-with-a-long-secret
-DEMO_MODE=true
-OPENAI_MODEL=gpt-5.6-luna
-OPENAI_API_KEY=your_openai_api_key
-```
-
-The OpenAI key is optional for the dashboard CRUD/review workflow. The application uses demo fallback data when MongoDB is unavailable. Add an API key only when you want the AI agent to call OpenAI.
-
-4. Start the backend in one terminal:
+Start backend:
 
 ```bash
 npm run dev:server
 ```
 
-5. Start the frontend in another:
+Start frontend in a second terminal:
 
 ```bash
 npm run dev:client
 ```
 
-Open the Vite URL shown in the terminal, normally `http://localhost:5173`.
+Open the Vite URL, normally:
 
-## What works without OpenAI credits
-
-- Dashboard navigation and live counts
-- Faculty add/deactivate/search
-- Course add/deactivate
-- Faculty request submission and review
-- Conflict creation, details and resolution
-- HOD approve/reject/override
-- Review queue automatically clears after a decision
-- Demo fallback data when MongoDB is unavailable
-
-The AI Agent page requires a working OpenAI API key with available API quota. ChatGPT subscription billing and API billing are separate.
+```text
+http://localhost:5173
+```
 
 ## Dataset
 
-You can later add/import your faculty, course and request dataset. The data layer is separated from the UI so the demo records can be replaced by MongoDB/imported records.
+The project already contains the large dataset under:
+
+```text
+server/data/
+```
+
+Important files include:
+
+- `faculty.csv` — 120 faculty
+- `faculty_expertise.csv` — faculty expertise records
+- `course.csv` — 70 courses
+- `course_version.csv` — course-version records
+- `course_offering.csv` — 300 offerings
+- `section.csv` — sections
+- `batch.csv` — batches
+- `faculty_workload.csv` — workload metrics
+- `faculty_allocation_candidates.csv` — 1,500 agent allocation candidates
+- `department.csv`, `person.csv`, `programme.csv`, `regulation.csv`, `academic_year.csv`, `term.csv`
+- `agent.csv`, `agent_tool.csv`
+
+The backend automatically loads the CSV dataset in local-memory mode. You do not need to manually import the CSV files into MongoDB to use the project.
+
+## Agent
+
+The agent uses Groq through the OpenAI-compatible API interface.
+
+Your own `server/.env` should contain your Groq configuration, including your secret API key and optionally the model/base URL settings you already use.
+
+The application falls back to deterministic local tool answers when `GROQ_API_KEY` is absent, so the dashboard and allocation workflow still work.
+
+The agent never finalizes an allocation. HOD approval remains the final step.
+
+## MongoDB
+
+Dataset mode is the default because it makes the supplied college-aligned dataset immediately usable.
+
+If you specifically want MongoDB-backed application data, set:
+
+```env
+DATA_SOURCE=mongodb
+```
+
+and provide your own valid `MONGO_URI`.
+
+## Agent workflow
+
+```text
+User
+  ↓
+Agent
+  ↓
+Tool selection
+  ↓
+Faculty / Course / Workload / Request data
+  ↓
+Deterministic scoring
+  ↓
+Recommendation
+  ↓
+Conflict + constraint checks
+  ↓
+HOD Review
+  ↓
+Approve / Reject / Override
+```
 
 ## Security
 
-Never commit a real API key, MongoDB password, or JWT secret. Keep them in `server/.env` only.
+Never commit or share API keys, MongoDB credentials, or JWT secrets.
+Keep secrets only in your own `server/.env`.

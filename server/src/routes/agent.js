@@ -1,10 +1,9 @@
 import {Router} from 'express';
 import {auth,role} from '../middleware/auth.js';
 import {runAgent} from '../agents/graph.js';
-import {runAllocationAnalysis,whatIf,runFullAllocation} from '../agents/allocationAgent.js';
+import {runAllocationAnalysis,whatIf} from '../agents/allocationAgent.js';
 const r=Router();
 r.post('/chat',auth,async(req,res)=>{try{const {message,threadId='default'}=req.body;if(!message?.trim())return res.status(400).json({message:'message is required'});res.json(await runAgent({message,threadId:String(threadId)}));}catch(e){res.status(500).json({message:e.message,code:'AGENT_ERROR'});}});
 r.post('/analyze',auth,async(req,res)=>{try{res.json(await runAllocationAnalysis(req.body))}catch(e){res.status(500).json({message:e.message})}});
 r.post('/what-if',auth,role('hod'),async(req,res)=>{try{res.json(await whatIf(req.body))}catch(e){res.status(500).json({message:e.message})}});
-r.post('/run-allocation',auth,role('hod'),async(req,res)=>{try{res.json(await runFullAllocation())}catch(e){res.status(500).json({message:e.message})}});
 export default r;

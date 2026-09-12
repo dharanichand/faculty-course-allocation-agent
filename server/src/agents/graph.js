@@ -136,182 +136,96 @@ function getClient() {
 // ======================================================
 
 async function localAgentAnswer(message) {
+  const q = String(message || '').trim();
+  const lower = q.toLowerCase();
 
-  const q = String(message || '').toLowerCase();
-
-
-  // --------------------------------------------------
-  // CONFLICT
-  // --------------------------------------------------
-
-  if (q.includes('conflict')) {
-
-    const data =
-      await toolFns.list_pending_conflicts({});
-
+  if (lower.includes('conflict') || lower.includes('multiple request')) {
+    const data = await toolFns.list_pending_conflicts({});
     return {
-
       answer: data.length
-        ? `I found ${data.length} course(s) with multiple pending faculty requests. HOD review is required before final allocation.`
-        : 'No conflicting multi-request courses were found in the current dataset.',
-
-      requiresHod:
-        data.length > 0,
-
-      toolTrace: [
-        {
-          name: 'list_pending_conflicts',
-          args: '{}'
-        }
-      ]
-
+        ? `I found ${data.length} course(s) with multiple pending allocation candidates. HOD review is required.`
+        : 'No pending multi-request conflicts were found in the dataset.',
+      requiresHod: data.length > 0,
+      toolTrace: [{name:'list_pending_conflicts',args:'{}'}]
     };
   }
 
-
-  // --------------------------------------------------
-  // FACULTY
-  // --------------------------------------------------
-
-  const facultyMatch =
-    String(message).match(/\bF\d{3,}\b/i);
-
-
-  if (facultyMatch) {
-
-    const id =
-      facultyMatch[0].toUpperCase();
-
-
-    const faculty =
-      await toolFns.get_faculty_profile({
-        facultyId: id
-      });
-
-
+  const whatFaculty = q.match(/\b(?:FAC\d{4}|F\d{3,})\b/i)?.[0];
+  const whatCourse = q.match(/\b(?:CS|AI|EC|EE|ME|CE|MC|MB)\d{3}\b/i)?.[0];
+  if ((lower.includes('what if') || lower.includes('assign') || lower.includes('simulate')) && whatFaculty && whatCourse) {
+    const result = await toolFns.what_if_assignment({facultyId:whatFaculty,courseId:whatCourse});
     return {
-
-      answer: faculty
-
-        ? `Verified faculty: ${faculty.name} (${faculty.facultyId}). Expertise: ${
-            (faculty.expertise || []).join(', ') ||
-            'not specified'
-          }. Current workload: ${
-            faculty.currentWorkload || 0
-          }/${
-            faculty.maxWorkload || 18
-          } hours.`
-
-        : `No verified faculty record was found for ${id}.`,
-
-      requiresHod: false,
-
-      toolTrace: [
-        {
-          name: 'get_faculty_profile',
-
-          args: JSON.stringify({
-            facultyId: id
-          })
-        }
-      ]
-
+      answer:`What-if simulation only — database modified: ${result.databaseModified ? 'yes' : 'no'}. Proposed score: ${result.proposedScore}/100. ${result.impact} ${result.hardViolations?.length ? `Violations: ${result.hardViolations.join('; ')}.` : 'No hard constraint violations detected.'}`,
+      requiresHod:Boolean(result.hardViolations?.length),
+      toolTrace:[{name:'what_if_assignment',args:JSON.stringify({facultyId:whatFaculty,courseId:whatCourse})}]
     };
   }
 
-
-  // --------------------------------------------------
-  // COURSE
-  // --------------------------------------------------
-
-  const courseMatch =
-    String(message).match(/\bCSE\d{3,}\b/i);
-
-
-  if (courseMatch) {
-
-    const id =
-      courseMatch[0].toUpperCase();
-
-
-    const result =
-      await toolFns.analyze_course({
-        courseId: id
-      });
-
-
+  const facultyId = whatFaculty;
+  if (facultyId) {
+    const f = await toolFns.get_faculty_profile({facultyId});
     return {
+      answer: f
+        ? `Verified faculty: ${f.name} (${f.employeeNo || f.facultyId}). Department: ${f.department}. Expertise: ${(f.expertise||[]).slice(0,8).join(', ') || 'not specified'}. Current workload: ${f.currentWorkload}/${f.maxWorkload} hours.`
+        : `No verified faculty record was found for ${facultyId.toUpperCase()}.`,
+      requiresHod:false,
+      toolTrace:[{name:'get_faculty_profile',args:JSON.stringify({facultyId})}]
+    };
+  }
 
+  const courseId = q.match(/\b(?:CS|AI|EC|EE|ME|CE|MC|MB)\d{3}\b/i)?.[0];
+  if (courseId) {
+    const result = await toolFns.analyze_course({courseId});
+    const rec = result.recommendation;
+    return {
       answer: result.course
-
-        ? `Verified course: ${result.course.courseName}. ${
-            result.requestCount
-          } faculty request(s). ${
-            result.recommendation
-
-              ? `Best eligible candidate is ${result.recommendation.verified.faculty} with score ${result.recommendation.score}/100.`
-
-              : 'No eligible recommendation was found.'
-          } ${
-            result.requiresHodReview
-              ? 'HOD review is required.'
-              : ''
-          }`
-
-        : `No verified course record was found for ${id}.`,
-
-      requiresHod:
-        !!result.requiresHodReview,
-
-      toolTrace: [
-        {
-          name: 'analyze_course',
-
-          args: JSON.stringify({
-            courseId: id
-          })
-        }
-      ]
-
+        ? `Verified course: ${result.course.courseCode} — ${result.course.courseName}. ${result.requestCount} pending candidate(s). ${rec ? `Top eligible candidate: ${rec.verified.faculty} with score ${rec.score}/100.` : 'No eligible candidate was found.'} ${result.requiresHodReview ? 'HOD review is required.' : ''}`
+        : `No verified course record was found for ${courseId.toUpperCase()}.`,
+      requiresHod:!!result.requiresHodReview,
+      toolTrace:[{name:'analyze_course',args:JSON.stringify({courseId})}]
     };
   }
 
+  if (/\b(all|list|show).*(faculty|teachers|professors)/i.test(q)) {
+    const data=await toolFns.search_faculty({query:''});
+    return {
+      answer:`The dataset contains ${data.length >= 20 ? 'many' : data.length} faculty records. Here are the first ${Math.min(data.length,20)}: ${data.slice(0,20).map(x=>`${x.name} (${x.facultyId})`).join(', ')}.`,
+      requiresHod:false, toolTrace:[{name:'search_faculty',args:'{"query":""}'}]
+    };
+  }
 
-  // --------------------------------------------------
-  // GENERAL SEARCH
-  // --------------------------------------------------
+  if (/\b(all|list|show).*(course|subject)/i.test(q)) {
+    const data=await toolFns.search_courses({query:''});
+    return {
+      answer:`Here are the first ${Math.min(data.length,20)} verified courses: ${data.slice(0,20).map(x=>`${x.courseCode} — ${x.courseName}`).join('; ')}.`,
+      requiresHod:false, toolTrace:[{name:'search_courses',args:'{"query":""}'}]
+    };
+  }
 
-  const data =
-    await toolFns.search_faculty({
-      query: message
-    });
-
+  const [fac, courses] = await Promise.all([
+    toolFns.search_faculty({query:q}),
+    toolFns.search_courses({query:q})
+  ]);
+  if (fac.length || courses.length) {
+    return {
+      answer:`Verified search results: ${fac.length ? `Faculty: ${fac.slice(0,8).map(x=>x.name).join(', ')}.` : ''} ${courses.length ? `Courses: ${courses.slice(0,8).map(x=>`${x.courseCode} — ${x.courseName}`).join(', ')}.` : ''}`,
+      requiresHod:false,
+      toolTrace:[
+        {name:'search_faculty',args:JSON.stringify({query:q})},
+        {name:'search_courses',args:JSON.stringify({query:q})}
+      ]
+    };
+  }
 
   return {
-
-    answer: data.length
-
-      ? `I found ${data.length} matching faculty record(s): ${data
-          .map(x => x.name)
-          .join(', ')}.`
-
-      : 'I could not find a matching verified faculty record. Add your dataset or include a faculty ID such as F001.',
-
-    requiresHod: false,
-
-    toolTrace: [
-      {
-        name: 'search_faculty',
-
-        args: JSON.stringify({
-          query: message
-        })
-      }
+    answer:'I could not find a matching verified faculty or course record in the current dataset. Try a faculty ID such as FAC0001 or a course code such as CS101.',
+    requiresHod:false,
+    toolTrace:[
+      {name:'search_faculty',args:JSON.stringify({query:q})},
+      {name:'search_courses',args:JSON.stringify({query:q})}
     ]
-
   };
 }
-
 
 // ======================================================
 // AGENT NODE
@@ -547,7 +461,7 @@ async function toolsNode(state) {
 
   return {
 
-    input: outputs,
+    input: [...state.input, ...outputs],
 
     pendingCalls: [],
 

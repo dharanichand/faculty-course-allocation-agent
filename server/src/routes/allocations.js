@@ -2,11 +2,11 @@ import {Router} from 'express';
 import {auth,role} from '../middleware/auth.js';
 import Allocation from '../models/Allocation.js';
 import AuditLog from '../models/AuditLog.js';
-import {pendingAllocations,decideMemoryAllocation,allFaculty,allCourses,memoryRequests} from '../data/store.js';
+import {pendingAllocations,decideMemoryAllocation,allFaculty,allCourses,memoryRequests,pendingConflicts} from '../data/store.js';
 import mongoose from 'mongoose';
 
 const r=Router();
-const dbReady=()=>mongoose.connection.readyState===1;
+const dbReady=()=>mongoose.connection.readyState===1 && process.env.DATA_SOURCE==='mongodb';
 
 r.get('/',auth,async(req,res)=>{try{res.json(await pendingAllocations())}catch(e){res.status(500).json({message:e.message})}});
 
@@ -14,9 +14,9 @@ r.get('/dashboard',auth,async(req,res)=>{
  try{
   const [fs,cs,ps]=await Promise.all([allFaculty(),allCourses(),pendingAllocations()]);
   const workload=fs.map(f=>({name:(f.name||'').replace(/^Dr\.\s*/,'').split(' ')[0],hours:Number(f.currentWorkload)||0,max:Number(f.maxWorkload)||18}));
-  const conflicts=cs.flatMap(c=>[]);
+  const conflicts=await pendingConflicts();
   const requestsCount=dbReady()?await Allocation.countDocuments():memoryRequests.length;
-  res.json({faculty:fs.length,courses:cs.length,requests:requestsCount,pendingReview:ps.length,workload,pending:ps});
+  res.json({faculty:fs.length,courses:cs.length,requests:requestsCount,pendingReview:ps.length,conflicts:conflicts.length,workload,pending:ps});
  }catch(e){res.status(500).json({message:e.message})}
 });
 

@@ -1,126 +1,244 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import XLSX from 'xlsx';
+import mongoose from 'mongoose';
 import Faculty from '../models/Faculty.js';
 import Course from '../models/Course.js';
-import Allocation from '../models/Allocation.js';
-import mongoose from 'mongoose';
 
-const __filename=fileURLToPath(import.meta.url);
-const __dirname=path.dirname(__filename);
-const DATA_DIR=path.resolve(__dirname,'../../data');
-const dbReady=()=>mongoose.connection.readyState===1;
-const csv=(name)=>XLSX.utils.sheet_to_json(XLSX.readFile(path.join(DATA_DIR,name),{raw:false}).Sheets[XLSX.readFile(path.join(DATA_DIR,name),{raw:false}).SheetNames[0]],{defval:''});
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const dbReady = () => mongoose.connection.readyState === 1 && process.env.DATA_SOURCE === 'mongodb';
 
-let loaded=false;
-let faculty=[]; let courses=[]; let requests=[]; let history=[]; let workloads=[]; let expertise=[]; let offerings=[]; let sections=[];
-
-function num(v,d=0){const n=Number(v); return Number.isFinite(n)?n:d;}
-function bool(v){return String(v).toLowerCase()==='true'||v===true||v==='1';}
-function loadCsvData(){
-  if(loaded)return;
-  const people=csv('person.csv');
-  const depts=csv('department.csv');
-  const personById=new Map(people.map(x=>[x.person_id,x]));
-  const deptById=new Map(depts.map(x=>[x.department_id,x]));
-  workloads=csv('faculty_workload.csv');
-  expertise=csv('faculty_expertise.csv');
-  sections=csv('section.csv');
-  offerings=csv('course_offering.csv');
-  const courseVersions=csv('course_version.csv');
-  const courseByVersion=new Map();
-  for(const x of courseVersions) courseByVersion.set(x.course_version_id,x);
-
-  const rawFaculty=csv('faculty.csv');
-  faculty=rawFaculty.map(f=>{
-    const p=personById.get(f.person_id)||{};
-    const d=deptById.get(f.department_id)||{};
-    const ex=expertise.filter(e=>e.faculty_id===f.faculty_id).map(e=>e.area).filter(Boolean);
-    const w=workloads.find(x=>x.faculty_id===f.faculty_id)||{};
-    return {
-      facultyId:f.employee_no || f.faculty_id,
-      sourceFacultyId:f.faculty_id,
-      name:p.full_name || f.employee_no,
-      email:p.email||'', department:d.department_code||d.name||f.department_id,
-      departmentId:f.department_id, designation:f.designation, cadre:f.cadre,
-      employmentType:f.employment_type, qualifications:f.highest_qualification?[f.highest_qualification]:[],
-      highestQualification:f.highest_qualification, isPhdHolder:bool(f.is_phd_holder),
-      expertise:[...new Set(ex)], specializations:[...new Set(ex)],
-      currentWorkload:num(w.total_weighted_load), maxWorkload:18,
-      workloadStatus:w.status||'WITHIN_NORM', availability:[], preferences:[], status:String(f.status||'ACTIVE').toLowerCase()
-    };
+function csv(file) {
+  const p = path.join(DATA_DIR, file);
+  if (!fs.existsSync(p)) return [];
+  const lines = fs.readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return [];
+  const headers = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const cols = line.split(',');
+    return Object.fromEntries(headers.map((h,i) => [h, cols[i] ?? '']));
   });
-  const facultyBySource=new Map(faculty.map(f=>[f.sourceFacultyId,f]));
-  const rawCourses=csv('course.csv');
-  const rawSections=sections;
-  const offeringByCourse=new Map();
-  for(const o of offerings){
-    const cv=courseByVersion.get(o.course_version_id); if(!cv)continue;
-    const arr=offeringByCourse.get(cv.course_id)||[]; arr.push(o); offeringByCourse.set(cv.course_id,arr);
-  }
-  courses=rawCourses.map(c=>{
-    const dept=deptById.get(c.owning_department_id)||{};
-    const versions=courseVersions.filter(v=>v.course_id===c.course_id);
-    const first=versions[0]||{};
-    const offs=offeringByCourse.get(c.course_id)||[];
-    const secs=offs.map(o=>rawSections.find(s=>s.section_id===o.section_id)).filter(Boolean);
-    const required=[];
-    const title=String(c.title||'');
-    const keywordMap={
-      'machine learning':['Machine Learning'],'deep learning':['Deep Learning'],'database':['Databases'],'data mining':['Data Mining'],
-      'cloud':['Cloud Computing'],'cyber':['Cyber Security'],'network':['Networks'],'artificial intelligence':['AI'],
-      'natural language':['NLP'],'computer vision':['Computer Vision'],'embedded':['Embedded Systems'],'power systems':['Power Systems'],
-      'control systems':['Control Systems'],'thermodynamics':['Thermodynamics'],'cad/cam':['CAD/CAM'],'structural':['Structural Engineering'],
-      'business analytics':['Business Analytics'],'management':['Management'],'programming':['Programming'],'data structures':['Data Structures']
-    };
-    const low=title.toLowerCase(); for(const [k,v] of Object.entries(keywordMap))if(low.includes(k))required.push(...v);
-    return {courseId:c.course_code||c.course_id, sourceCourseId:c.course_id, courseCode:c.course_code||c.course_id, courseName:c.title,
-      department:dept.department_code||dept.name||c.owning_department_id, departmentId:c.owning_department_id,
-      credits:num(first.credits,3), theoryHours:num(first.lecture_hours), labHours:num(first.practical_hours), tutorialHours:num(first.tutorial_hours),
-      requiredExpertise:[...new Set(required)], requiredQualification:['M.Tech'],
-      sections:secs.map(s=>({sectionId:s.section_id,sectionName:s.code,studentCount:num(s.strength),hoursPerWeek:num(first.lecture_hours)+num(first.practical_hours)+num(first.tutorial_hours)})),
-      studentStrength:secs.reduce((a,s)=>a+num(s?.strength),0), status:String(c.is_active).toLowerCase()==='true'?'open':'inactive'};
-  });
-  const courseBySource=new Map(courses.map(c=>[c.sourceCourseId,c]));
-  const rawCandidates=csv('faculty_allocation_candidates.csv');
-  requests=rawCandidates.map((r,i)=>{
-    const f=facultyBySource.get(r.faculty_id);
-    const o=offerings.find(x=>x.course_offering_id===r.course_offering_id);
-    const cv=o?courseByVersion.get(o.course_version_id):null;
-    const c=cv?courseBySource.get(cv.course_id):null;
-    return {_id:r.candidate_id||`csv-request-${i+1}`,facultyId:f?.facultyId||r.faculty_id,sourceFacultyId:r.faculty_id,
-      courseId:c?.courseId||cv?.course_code||cv?.course_id||r.course_offering_id,sourceCourseId:cv?.course_id||'',courseOfferingId:r.course_offering_id,
-      sectionId:o?.section_id||'',preferenceRank:num(r.preference_rank,1),recommendationScore:Math.round(num(r.match_score)*100),
-      matchScore:num(r.match_score),expertiseMatch:num(r.expertise_match),workloadFit:num(r.workload_fit),availabilityFit:num(r.availability_fit),
-      preferenceFit:num(r.preference_fit),conflictRisk:num(r.conflict_risk),proposedByAgent:bool(r.proposed_by_agent),
-      recommendationReason:'Matched against verified faculty expertise and workload data from the college-aligned dataset.',
-      status:String(r.status||'PENDING_REVIEW').toLowerCase()==='pending_review'?'pending':String(r.status||'pending').toLowerCase()};
-  });
-  // The CSV is the source of truth in CSV mode. If a candidate row is malformed, keep it visible rather than dropping it.
-  requests=requests.filter(Boolean);
-  loaded=true;
-  console.log(`CSV dataset loaded: ${faculty.length} faculty, ${courses.length} courses, ${requests.length} allocation requests.`);
 }
 
-loadCsvData();
+const peopleRows = csv('person.csv');
+const deptRows = csv('department.csv');
+const facultyRows = csv('faculty.csv');
+const expertiseRows = csv('faculty_expertise.csv');
+const courseRows = csv('course.csv');
+const versionRows = csv('course_version.csv');
+const sectionRows = csv('section.csv');
+const offeringRows = csv('course_offering.csv');
+const workloadRows = csv('faculty_workload.csv');
+const candidateRows = csv('faculty_allocation_candidates.csv');
 
-export const memoryRequests=requests;
-export async function allFaculty(){if(dbReady())return Faculty.find({status:{$ne:'inactive'}}).lean(); loadCsvData(); return faculty.filter(f=>f.status!=='inactive');}
-export async function findFaculty(id){if(dbReady())return Faculty.findOne({$or:[{facultyId:id},{employeeNo:id}]}).lean(); loadCsvData(); return faculty.find(f=>f.facultyId===id||f.sourceFacultyId===id);}
-export async function searchFaculty(q){loadCsvData();const s=String(q||'').toLowerCase();return (await allFaculty()).filter(f=>[f.facultyId,f.sourceFacultyId,f.name,f.department,...f.expertise,...f.specializations].join(' ').toLowerCase().includes(s)).slice(0,25);}
-export async function allCourses(){if(dbReady())return Course.find({status:'open'}).lean(); loadCsvData(); return courses.filter(c=>c.status!=='inactive');}
-export async function findCourse(id){if(dbReady())return Course.findOne({$or:[{courseId:id},{courseCode:id}]}).lean(); loadCsvData(); return courses.find(c=>c.courseId===id||c.courseCode===id||c.sourceCourseId===id);}
-export async function searchCourses(q){loadCsvData();const s=String(q||'').toLowerCase();return (await allCourses()).filter(c=>[c.courseId,c.courseCode,c.sourceCourseId,c.courseName,c.department,...c.requiredExpertise].join(' ').toLowerCase().includes(s)).slice(0,25);}
-export async function courseRequests(courseId){if(dbReady())return Allocation.find({courseId,status:{$in:['pending','recommended']}}).lean(); loadCsvData(); return requests.filter(r=>String(r.courseId).toLowerCase()===String(courseId).toLowerCase()&&['pending','recommended'].includes(r.status));}
-export async function pendingAllocations(){if(dbReady())return Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean(); loadCsvData(); return requests.filter(r=>['pending','recommended'].includes(r.status));}
-export async function allRequests(){if(dbReady())return Allocation.find().sort({createdAt:-1}).lean(); loadCsvData(); return requests;}
-export async function decideMemoryAllocation(id,status,patch={}){loadCsvData();const item=requests.find(r=>r._id===id);if(!item)return null;Object.assign(item,{status,...patch});return item;}
-export async function addMemoryRequest(item){loadCsvData();requests.unshift(item);return item;}
-export async function facultyHistory(facultyId){return historyFor(facultyId);}
-function historyFor(facultyId){
-  // The provided large dataset has no teaching-history table, so use an empty verified history rather than inventing one.
+const deptById = new Map(deptRows.map(x => [x.department_id, x.department_code]));
+const personById = new Map(peopleRows.map(x => [x.person_id, x]));
+const expertiseByFaculty = new Map();
+for (const x of expertiseRows) {
+  if (!expertiseByFaculty.has(x.faculty_id)) expertiseByFaculty.set(x.faculty_id, []);
+  expertiseByFaculty.get(x.faculty_id).push(x.area);
+}
+const workloadByFaculty = new Map(workloadRows.map(x => [x.faculty_id, x]));
+const versionById = new Map(versionRows.map(x => [x.course_version_id, x]));
+const sectionById = new Map(sectionRows.map(x => [x.section_id, x]));
+const courseById = new Map(courseRows.map(x => [x.course_id, x]));
+const offeringById = new Map(offeringRows.map(x => [x.course_offering_id, x]));
+
+function number(v, fallback=0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function requiredExpertise(title='') {
+  const t = title.toLowerCase();
+  const rules = [
+    ['machine learning','Machine Learning'],['deep learning','Deep Learning'],['artificial intelligence','Artificial Intelligence'],
+    ['natural language','Natural Language Processing'],['data mining','Data Mining'],['database','Database Systems'],
+    ['cloud','Cloud Computing'],['cyber','Cyber Security'],['network','Networks'],['embedded','Embedded Systems'],
+    ['vlsi','VLSI'],['power','Power Systems'],['control','Control Systems'],['thermodynamic','Thermodynamics'],
+    ['cad','CAD/CAM'],['structural','Structural Engineering'],['business analytics','Business Analytics'],
+    ['management','Management'],['programming','Programming'],['data structure','Data Structures'],
+    ['computer vision','Computer Vision'],['web','Web Technologies'],['operating systems','Operating Systems']
+  ];
+  const found = rules.filter(([k]) => t.includes(k)).map(([,v]) => v);
+  return found.length ? [found[0]] : ['Programming'];
+}
+
+function normalizeFaculty(row) {
+  const person = personById.get(row.person_id) || {};
+  const expertise = expertiseByFaculty.get(row.faculty_id) || [];
+  const workload = workloadByFaculty.get(row.faculty_id) || {};
+  const q = row.highest_qualification || '';
+  const qualifications = row.is_phd_holder === 'true' || row.is_phd_holder === true
+    ? ['Ph.D', q].filter(Boolean)
+    : [q || 'M.Tech'];
+  const current = number(workload.total_weighted_load);
+  const max = 18;
+  return {
+    facultyId: row.faculty_id,
+    name: person.full_name || row.employee_no,
+    department: deptById.get(row.department_id) || row.department_id,
+    designation: row.designation || 'Assistant Professor',
+    qualifications: [...new Set(qualifications)],
+    specializations: expertise.slice(0,5),
+    expertise,
+    maxWorkload: max,
+    currentWorkload: current,
+    availability: [],
+    preferences: [],
+    status: String(row.status || 'ACTIVE').toLowerCase() === 'active' ? 'active' : 'inactive',
+    employeeNo: row.employee_no
+  };
+}
+
+function normalizeCourse(row) {
+  const versions = versionRows.filter(v => v.course_id === row.course_id);
+  const relevant = versions[0] || {};
+  const sections = offeringRows
+    .filter(o => o.course_version_id && versions.some(v => v.course_version_id === o.course_version_id))
+    .map(o => sectionById.get(o.section_id))
+    .filter(Boolean)
+    .reduce((acc,s) => {
+      if (!acc.some(x => x.sectionId === s.section_id)) {
+        acc.push({sectionId:s.section_id, sectionName:s.code, studentCount:number(s.strength), hoursPerWeek:0});
+      }
+      return acc;
+    }, []);
+  const hours = number(relevant.lecture_hours) + number(relevant.tutorial_hours) + number(relevant.practical_hours);
+  const studentStrength = sections.length ? Math.max(...sections.map(s => s.studentCount)) : 0;
+  return {
+    courseId: row.course_id,
+    courseCode: row.course_code,
+    courseName: row.title,
+    department: deptById.get(row.owning_department_id) || row.owning_department_id,
+    credits: number(relevant.credits,3),
+    theoryHours: number(relevant.lecture_hours),
+    labHours: number(relevant.practical_hours),
+    tutorialHours: number(relevant.tutorial_hours),
+    requiredExpertise: requiredExpertise(row.title),
+    requiredQualification: ['M.Tech'],
+    sections: sections.length ? sections : [{sectionId:`${row.course_code}-A`,sectionName:'A',studentCount:studentStrength,hoursPerWeek:hours}],
+    studentStrength,
+    status: 'open'
+  };
+}
+
+const fileFaculty = facultyRows.map(normalizeFaculty);
+const fileCourses = courseRows.map(normalizeCourse);
+
+export const memoryFaculty = fileFaculty.length ? fileFaculty : [];
+export const memoryCourses = fileCourses.length ? fileCourses : [];
+
+// Compatibility exports for existing routes/pages.
+export const memoryRequests = candidateRows.map((r,i) => {
+  const offering = offeringById.get(r.course_offering_id) || {};
+  const version = versionById.get(offering.course_version_id) || {};
+  const course = courseById.get(version.course_id);
+  return {
+    _id: r.candidate_id || `dataset-request-${i+1}`,
+    facultyId: r.faculty_id,
+    courseId: course?.course_id || version.course_id || '',
+    sectionId: offering.section_id || '',
+    preferenceRank: Math.max(1, Math.min(5, i % 5 + 1)),
+    status: String(r.status || 'PENDING_REVIEW').toLowerCase() === 'pending_review' ? 'pending' : String(r.status || 'pending').toLowerCase(),
+    recommendationScore: Math.round(number(r.match_score) * 100),
+    recommendationReason: `Agent candidate score ${Math.round(number(r.match_score)*100)}/100 using expertise, workload, availability, preference and conflict-risk signals.`,
+    proposedByAgent: true
+  };
+});
+
+const autoConflicts = memoryCourses.map(c => {
+  const count = memoryRequests.filter(r => r.courseId === c.courseId && ['pending','recommended'].includes(r.status)).length;
+  return count > 1 ? {
+    conflictId: `AUTO-${c.courseCode}`,
+    severity: count >= 4 ? 'HIGH' : 'MEDIUM',
+    type: 'Multiple faculty requests',
+    courseId: c.courseId,
+    courseName: c.courseName,
+    facultyIds: [...new Set(memoryRequests.filter(r => r.courseId === c.courseId && ['pending','recommended'].includes(r.status)).map(r => r.facultyId))].slice(0,10),
+    facultyNames: [...new Set(memoryRequests.filter(r => r.courseId === c.courseId && ['pending','recommended'].includes(r.status)).map(r => memoryFaculty.find(f => f.facultyId === r.facultyId)?.name || r.facultyId))].slice(0,10),
+    description: `${count} pending allocation candidates exist for this course. The agent can rank them, but final selection requires HOD review.`,
+    status: 'open'
+  } : null;
+}).filter(Boolean);
+export const memory = { faculty: memoryFaculty, courses: memoryCourses, conflicts: autoConflicts };
+
+export async function allFaculty() {
+  return dbReady()
+    ? Faculty.find({status:{$ne:'inactive'}}).sort({name:1}).lean()
+    : memory.faculty.filter(f => f.status !== 'inactive');
+}
+
+export async function findFaculty(id) {
+  const s = String(id || '').trim().toLowerCase();
+  if (dbReady()) {
+    return Faculty.findOne({$or:[{facultyId:id},{name:new RegExp(`^${String(id).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`,'i')}, {employeeNo:id}]}).lean();
+  }
+  return memory.faculty.find(f => [f.facultyId,f.employeeNo,f.name].some(v => String(v||'').toLowerCase() === s));
+}
+
+export async function searchFaculty(q) {
+  const s = String(q||'').toLowerCase().trim();
+  const data = await allFaculty();
+  if (!s) return data.slice(0,20);
+  return data.filter(f => [f.facultyId,f.employeeNo,f.name,f.department,f.designation,...(f.expertise||[]),...(f.specializations||[]),...(f.qualifications||[])].join(' ').toLowerCase().includes(s)).slice(0,20);
+}
+
+export async function allCourses() {
+  return dbReady() ? Course.find({status:{$ne:'inactive'}}).sort({courseCode:1}).lean() : memory.courses.filter(c => c.status !== 'inactive');
+}
+
+function resolveCourse(id) {
+  const s = String(id||'').trim().toLowerCase();
+  return memory.courses.find(c => String(c.courseId).toLowerCase() === s || String(c.courseCode).toLowerCase() === s || String(c.courseName).toLowerCase() === s);
+}
+
+export async function findCourse(id) {
+  if (dbReady()) {
+    return Course.findOne({$or:[{courseId:id},{courseCode:id}]}).lean();
+  }
+  return resolveCourse(id);
+}
+
+export async function searchCourses(q) {
+  const s=String(q||'').toLowerCase().trim();
+  const data=await allCourses();
+  if(!s) return data.slice(0,20);
+  return data.filter(c => [c.courseId,c.courseCode,c.courseName,c.department,...(c.requiredExpertise||[])].join(' ').toLowerCase().includes(s)).slice(0,20);
+}
+
+function resolvedCourseId(courseId) {
+  const c=resolveCourse(courseId);
+  return c?.courseId || courseId;
+}
+
+export async function courseRequests(courseId) {
+  if (dbReady()) return (await import('../models/Allocation.js')).default.find({$or:[{courseId},{courseCode:courseId}],status:{$in:['pending','recommended']}}).lean();
+  const cid=resolvedCourseId(courseId);
+  return memoryRequests.filter(r=>r.courseId===cid && ['pending','recommended'].includes(r.status));
+}
+
+export async function pendingAllocations() {
+  if (dbReady()) return (await import('../models/Allocation.js')).default.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+  return memoryRequests.filter(r=>['pending','recommended'].includes(r.status));
+}
+
+export async function decideMemoryAllocation(id,status,patch={}) {
+  const item=memoryRequests.find(r=>r._id===id);
+  if(!item)return null;
+  Object.assign(item,{status,...patch});
+  return item;
+}
+
+export async function facultyHistory(facultyId) {
+  if (dbReady()) return [];
   return [];
 }
-export async function pendingConflicts(){loadCsvData();const map=new Map();for(const r of requests.filter(x=>['pending','recommended'].includes(x.status))){const key=r.courseId;const arr=map.get(key)||[];arr.push(r);map.set(key,arr);}const out=[];for(const [courseId,rs] of map){if(rs.length>1){const c=await findCourse(courseId);out.push({courseId,courseName:c?.courseName||courseId,count:rs.length,requests:rs});}}return out;}
-export function getCsvStats(){loadCsvData();return {faculty:faculty.length,courses:courses.length,requests:requests.length,pendingReview:requests.filter(r=>['pending','recommended'].includes(r.status)).length,reviewed:requests.filter(r=>!['pending','recommended'].includes(r.status)).length};}
+
+export async function pendingConflicts() {
+  const out=[];
+  for (const c of memory.courses) {
+    const r=memoryRequests.filter(x=>x.courseId===c.courseId && ['pending','recommended'].includes(x.status));
+    if(r.length>1) out.push({courseId:c.courseId,courseName:c.courseName,count:r.length,requests:r});
+  }
+  return out;
+}
