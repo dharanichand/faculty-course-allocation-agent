@@ -1,10 +1,10 @@
 import React,{useEffect,useState} from 'react';
-import {Check,X,RotateCcw,Sparkles,Scale,History,GraduationCap,BriefcaseBusiness,ChevronLeft,ChevronRight} from 'lucide-react';
+import {Check,X,RotateCcw,Sparkles,Scale,History,GraduationCap,BriefcaseBusiness,ChevronLeft,ChevronRight,Square,CheckSquare} from 'lucide-react';
 import {Card,PageTitle,Badge,AskAgentButton} from '../components/UI';
 import {apiRequest} from '../api';
 
 export default function AllocationReview(){
- const [items,setItems]=useState([]),[selected,setSelected]=useState(0),[override,setOverride]=useState(false),[reason,setReason]=useState(''),[overrideFaculty,setOverrideFaculty]=useState(''),[faculty,setFaculty]=useState([]),[courses,setCourses]=useState([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ const [items,setItems]=useState([]),[selected,setSelected]=useState(0),[selectedIds,setSelectedIds]=useState([]),[override,setOverride]=useState(false),[reason,setReason]=useState(''),[bulkReason,setBulkReason]=useState(''),[overrideFaculty,setOverrideFaculty]=useState(''),[faculty,setFaculty]=useState([]),[courses,setCourses]=useState([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
 
  const load=async()=>{
   try{
@@ -15,6 +15,7 @@ export default function AllocationReview(){
    ]);
    const nextItems=a.data||[];
    setItems(nextItems);
+   setSelectedIds(prev=>prev.filter(id=>nextItems.some(x=>x._id===id)));
    setSelected(i=>Math.min(i,Math.max(0,nextItems.length-1)));
    setFaculty(f.data||[]);
    setCourses(c.data||[]);
@@ -50,6 +51,22 @@ export default function AllocationReview(){
   finally{setBusy(false)}
  };
 
+ const allSelected=items.length>0 && selectedIds.length===items.length;
+ const toggleSelected=(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+ const toggleAll=()=>setSelectedIds(allSelected?[]:items.map(x=>x._id));
+ const bulkDecide=async(action)=>{
+  if(!selectedIds.length)return;
+  try{
+   setBusy(true);setMessage('');
+   const url=action==='approve'?'/allocations/bulk-approve':'/allocations/bulk-reject';
+   const response=await apiRequest({method:'POST',url,data:action==='reject'?{ids:selectedIds,reason:bulkReason}: {ids:selectedIds}});
+   const remaining=response.data?.remaining||[];
+   setItems(remaining);setSelectedIds([]);setSelected(i=>Math.min(i,Math.max(0,remaining.length-1)));setBulkReason('');
+   setMessage(`${response.data?.updated||selectedIds.length} request(s) ${action==='approve'?'approved':'rejected'} successfully.`);
+  }catch(e){setMessage(e?.response?.data?.message||`Bulk ${action} failed.`)}
+  finally{setBusy(false)}
+ };
+
  const saveOverride=async()=>{
   if(!current||!overrideFaculty)return;
   try{
@@ -69,10 +86,29 @@ export default function AllocationReview(){
  return <div className="pb-24">
   <PageTitle eyebrow="HUMAN-IN-THE-LOOP" title="HOD Allocation Review" desc="AI recommends; the HOD decides. Review one faculty request at a time."/>
   {message&&<div className="mb-4 p-3 rounded-xl alert-info text-sm">{message}</div>}
+  <Card className="mb-4 p-4">
+   <div className="flex flex-wrap items-center justify-between gap-3">
+    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+     <input type="checkbox" checked={allSelected} onChange={toggleAll} className="sr-only"/>
+     {allSelected?<CheckSquare size={19} className="text-fuchsia-700"/>:<Square size={19} className="text-slate-400"/>}
+     Select all ({items.length})
+    </label>
+    <div className="flex flex-wrap items-center gap-2">
+     <span className="text-xs text-slate-500">{selectedIds.length} selected</span>
+     <button type="button" disabled={busy||!selectedIds.length} onClick={()=>bulkDecide('approve')} className="px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-xs flex items-center gap-1.5 disabled:opacity-40"><Check size={15}/> Accept selected</button>
+     <button type="button" disabled={busy||!selectedIds.length} onClick={()=>bulkDecide('reject')} className="px-3 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-semibold text-xs flex items-center gap-1.5 disabled:opacity-40"><X size={15}/> Reject selected</button>
+    </div>
+   </div>
+   {selectedIds.length>0&&<input value={bulkReason} onChange={e=>setBulkReason(e.target.value)} placeholder="Optional reason for bulk rejection" className="field-input mt-3 w-full px-3 py-2 rounded-lg text-sm"/>}
+  </Card>
   <Card className="overflow-hidden">
    <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-fuchsia-500/8 to-transparent">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
      <div>
+      <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-2 cursor-pointer">
+       <input type="checkbox" checked={selectedIds.includes(current._id)} onChange={()=>toggleSelected(current._id)} className="h-4 w-4 accent-fuchsia-700"/>
+       Select this request
+      </label>
       <div className="text-xs font-bold text-fuchsia-700">{courseName} • {current.sectionId||'SECTION A'}</div>
       <h2 className="font-display text-xl font-semibold mt-1 text-slate-800">Allocation candidate</h2>
       <p className="text-sm text-slate-500 mt-1">Faculty request from {name(current.facultyId)} • Preference #{current.preferenceRank||1}</p>

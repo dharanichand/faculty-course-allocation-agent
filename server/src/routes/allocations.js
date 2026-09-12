@@ -20,6 +20,53 @@ r.get('/dashboard',auth,async(req,res)=>{
  }catch(e){res.status(500).json({message:e.message})}
 });
 
+r.post('/bulk-approve',auth,role('hod'),async(req,res)=>{
+ try{
+  const ids=Array.isArray(req.body?.ids)?req.body.ids.filter(Boolean):[];
+  if(!ids.length)return res.status(400).json({message:'Select at least one allocation.'});
+  if(dbReady()){
+   const docs=await Allocation.find({_id:{$in:ids},status:{$in:['pending','recommended']}});
+   if(!docs.length)return res.status(404).json({message:'No selected pending allocations found.'});
+   const result=await Allocation.updateMany({_id:{$in:docs.map(x=>x._id)},status:{$in:['pending','recommended']}},{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date()}});
+   for(const d of docs){
+    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(d._id),newValue:{...d.toObject(),status:'approved',approvedBy:req.user.id}});
+   }
+   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   return res.json({ok:true,updated:result.modifiedCount,remaining});
+  }
+  let updated=0;
+  for(const id of ids){
+   const item=await decideMemoryAllocation(id,'approved',{approvedBy:req.user.id,approvedAt:new Date()});
+   if(item)updated++;
+  }
+  return res.json({ok:true,updated,remaining:await pendingAllocations()});
+ }catch(e){res.status(400).json({message:e.message})}
+});
+
+r.post('/bulk-reject',auth,role('hod'),async(req,res)=>{
+ try{
+  const ids=Array.isArray(req.body?.ids)?req.body.ids.filter(Boolean):[];
+  if(!ids.length)return res.status(400).json({message:'Select at least one allocation.'});
+  const reason=req.body?.reason||'Rejected in bulk by HOD';
+  if(dbReady()){
+   const docs=await Allocation.find({_id:{$in:ids},status:{$in:['pending','recommended']}});
+   if(!docs.length)return res.status(404).json({message:'No selected pending allocations found.'});
+   const result=await Allocation.updateMany({_id:{$in:docs.map(x=>x._id)},status:{$in:['pending','recommended']}},{$set:{status:'rejected',overrideReason:reason}});
+   for(const d of docs){
+    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'REJECT_ALLOCATION',entityType:'allocation',entityId:String(d._id),newValue:{...d.toObject(),status:'rejected',overrideReason:reason},reason});
+   }
+   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   return res.json({ok:true,updated:result.modifiedCount,remaining});
+  }
+  let updated=0;
+  for(const id of ids){
+   const item=await decideMemoryAllocation(id,'rejected',{overrideReason:reason});
+   if(item)updated++;
+  }
+  return res.json({ok:true,updated,remaining:await pendingAllocations()});
+ }catch(e){res.status(400).json({message:e.message})}
+});
+
 r.post('/:id/approve',auth,role('hod'),async(req,res)=>{
  try{
   let item;
