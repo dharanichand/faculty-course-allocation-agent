@@ -1,6 +1,5 @@
 import React from 'react';
-import {useNavigate} from 'react-router-dom';
-import {ChevronRight,Sparkles,X,Bot} from 'lucide-react';
+import {ChevronRight,Sparkles,X} from 'lucide-react';
 
 export const Card=({children,className=''})=><div className={`panel rounded-2xl ${className}`}>{children}</div>;
 
@@ -30,7 +29,7 @@ const statTones={
 };
 export const Stat=({label,value,sub,icon:Icon,tone='blue'})=>{
   const t=statTones[tone]||statTones.blue;
-  return <Card className="p-5 relative overflow-hidden card-hover">
+  return <Card className="p-5 relative overflow-hidden">
     <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${t.bar}`}/>
     <div className="flex items-start justify-between">
       <div>
@@ -38,7 +37,7 @@ export const Stat=({label,value,sub,icon:Icon,tone='blue'})=>{
         <div className="font-display text-2xl font-semibold text-slate-900 mt-1">{value}</div>
         <div className="text-xs text-slate-400 mt-1">{sub}</div>
       </div>
-      <div className={`icon-pop w-10 h-10 rounded-xl flex items-center justify-center ${t.chip}`}><Icon size={19}/></div>
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.chip}`}><Icon size={19}/></div>
     </div>
   </Card>;
 };
@@ -62,48 +61,6 @@ export function Modal({open,title,onClose,children}){
       </div>
       <div className="p-5">{children}</div>
     </div>
-  </div>;
-}
-
-// AskAgentButton: drops a pre-filled question for the AI Agent and jumps to the agent chat,
-// so every page (not just the /agent route) can hand a real, contextual task to the agent.
-export function AskAgentButton({prompt,label='Ask AI Agent',className='',iconSize=13}){
-  const navigate=useNavigate();
-  const go=(e)=>{
-    e.stopPropagation();
-    try{sessionStorage.setItem('allocation_agent_prefill',prompt)}catch{}
-    navigate('/agent');
-  };
-  return <button type="button" onClick={go} title={prompt} className={`inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-600 hover:text-blue-700 ${className}`}>
-    <Bot size={iconSize}/> {label}
-  </button>;
-}
-
-// Tilt3D: perspective-tilt wrapper with a moving glare highlight, driven by the
-// mouse position. Used to give Dashboard cards genuine 3D depth on hover.
-export function Tilt3D({children,className='',max=8,glare=true,scale=1.015}){
-  const ref=React.useRef(null);
-  const [style,setStyle]=React.useState({transform:'perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)'});
-  const [glarePos,setGlarePos]=React.useState({x:50,y:50,opacity:0});
-
-  const onMove=(e)=>{
-    const el=ref.current; if(!el)return;
-    const r=el.getBoundingClientRect();
-    const px=(e.clientX-r.left)/r.width;
-    const py=(e.clientY-r.top)/r.height;
-    const rotateY=(px-0.5)*max*2;
-    const rotateX=-(py-0.5)*max*2;
-    setStyle({transform:`perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(${scale},${scale},${scale})`});
-    setGlarePos({x:px*100,y:py*100,opacity:0.16});
-  };
-  const onLeave=()=>{
-    setStyle({transform:'perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)'});
-    setGlarePos(g=>({...g,opacity:0}));
-  };
-
-  return <div ref={ref} onMouseMove={onMove} onMouseLeave={onLeave} className={`tilt-3d group ${className}`} style={style}>
-    <div className="tilt-3d-inner">{children}</div>
-    {glare&&<div className="tilt-glare" style={{background:`radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,${glarePos.opacity}), transparent 60%)`}}/>}
   </div>;
 }
 

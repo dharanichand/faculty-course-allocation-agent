@@ -1,6 +1,9 @@
 import {Router} from 'express';import bcrypt from 'bcryptjs';import jwt from 'jsonwebtoken';import User from '../models/User.js';
+import {sendWelcomeEmail} from '../services/emailService.js';
 const r=Router();
-r.post('/register',async(req,res)=>{try{const {name,email,password,role='faculty',facultyId}=req.body;if(!name||!email||!password)return res.status(400).json({message:'name, email and password required'});const passwordHash=await bcrypt.hash(password,12);const u=await User.create({name,email,passwordHash,role,facultyId});res.status(201).json({id:u._id,name:u.name,email:u.email,role:u.role})}catch(e){res.status(400).json({message:e.message})}});
+r.post('/register',async(req,res)=>{try{const {name,email,password,role='faculty',facultyId}=req.body;if(!name||!email||!password)return res.status(400).json({message:'name, email and password required'});const passwordHash=await bcrypt.hash(password,12);const u=await User.create({name,email,passwordHash,role,facultyId});
+try{await sendWelcomeEmail(u)}catch(mailError){console.error('Welcome email failed:',mailError.message)}
+res.status(201).json({id:u._id,name:u.name,email:u.email,role:u.role})}catch(e){res.status(400).json({message:e.message})}});
 r.post('/login',async(req,res)=>{try{const u=await User.findOne({email:req.body.email});if(!u||!(await bcrypt.compare(req.body.password,u.passwordHash)))return res.status(401).json({message:'Invalid credentials'});const token=jwt.sign({id:u._id,role:u.role,facultyId:u.facultyId},process.env.JWT_SECRET||'change-me',{expiresIn:'8h'});res.json({token,user:{name:u.name,email:u.email,role:u.role,facultyId:u.facultyId}})}catch(e){res.status(500).json({message:e.message})}});
 r.post('/demo',async(req,res)=>{const token=jwt.sign({id:'demo-hod',role:'hod',facultyId:null,name:'Dr. Ananya Rao'},process.env.JWT_SECRET||'change-me',{expiresIn:'8h'});res.json({token,user:{name:'Dr. Ananya Rao',email:'hod@demo.local',role:'hod'}})});
 export default r;
