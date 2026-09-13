@@ -70,6 +70,17 @@ export default function AgentChat() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // Other pages (Courses, Faculty, Conflicts, HOD Review) hand off a contextual
+  // question via sessionStorage, so arriving here auto-asks it.
+  useEffect(() => {
+    const prefill = sessionStorage.getItem('allocation_agent_prefill');
+    if (prefill) {
+      sessionStorage.removeItem('allocation_agent_prefill');
+      send(prefill);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function getToken() {
     const cached = sessionStorage.getItem('allocation_demo_token');
     if (cached) return cached;
