@@ -29,13 +29,22 @@ const sectionRows = csv('section.csv');
 const offeringRows = csv('course_offering.csv');
 const workloadRows = csv('faculty_workload.csv');
 const candidateRows = csv('faculty_allocation_candidates.csv');
+const gmailRows = csv('faculty_gmail_dataset.csv');
 
 const deptById = new Map(deptRows.map(x => [x.department_id, x.department_code]));
+// Real, deliverable inboxes used for the Brevo-powered notification emails.
+// Falls back to the (often non-routable) college email from person.csv.
+const gmailByFaculty = new Map(gmailRows.map(x => [x.faculty_id, x.email]));
 const personById = new Map(peopleRows.map(x => [x.person_id, x]));
 const expertiseByFaculty = new Map();
+const publicationsByFaculty = new Map();
 for (const x of expertiseRows) {
   if (!expertiseByFaculty.has(x.faculty_id)) expertiseByFaculty.set(x.faculty_id, []);
   expertiseByFaculty.get(x.faculty_id).push(x.area);
+  if (String(x.source || '').toUpperCase() === 'PUBLICATION') {
+    if (!publicationsByFaculty.has(x.faculty_id)) publicationsByFaculty.set(x.faculty_id, []);
+    publicationsByFaculty.get(x.faculty_id).push(x.area);
+  }
 }
 const workloadByFaculty = new Map(workloadRows.map(x => [x.faculty_id, x]));
 const versionById = new Map(versionRows.map(x => [x.course_version_id, x]));
@@ -76,11 +85,13 @@ function normalizeFaculty(row) {
   return {
     facultyId: row.faculty_id,
     name: person.full_name || row.employee_no,
+    email: gmailByFaculty.get(row.faculty_id) || person.email || '',
     department: deptById.get(row.department_id) || row.department_id,
     designation: row.designation || 'Assistant Professor',
     qualifications: [...new Set(qualifications)],
     specializations: expertise.slice(0,5),
     expertise,
+    publications: [...new Set(publicationsByFaculty.get(row.faculty_id) || [])],
     maxWorkload: max,
     currentWorkload: current,
     availability: [],
@@ -124,12 +135,13 @@ function normalizeCourse(row) {
 
 const fileFaculty = facultyRows.map(normalizeFaculty);
 const fileCourses = courseRows.map(normalizeCourse);
+const validFacultyIds = new Set(fileFaculty.map(f => f.facultyId));
 
 export const memoryFaculty = fileFaculty.length ? fileFaculty : [];
 export const memoryCourses = fileCourses.length ? fileCourses : [];
 
 // Compatibility exports for existing routes/pages.
-export const memoryRequests = candidateRows.map((r,i) => {
+const datasetRequests = candidateRows.filter(r => validFacultyIds.has(r.faculty_id)).map((r,i) => {
   const offering = offeringById.get(r.course_offering_id) || {};
   const version = versionById.get(offering.course_version_id) || {};
   const course = courseById.get(version.course_id);
@@ -146,6 +158,15 @@ export const memoryRequests = candidateRows.map((r,i) => {
   };
 });
 
+export const syntheticRequests = memoryFaculty.length >= 2 && memoryCourses.length >= 2
+  ? [
+      {syntheticKey:'synthetic-review-1',_id:'synthetic-review-1',facultyId:memoryFaculty[0].facultyId,courseId:memoryCourses[0].courseId,sectionId:memoryCourses[0].sections?.[0]?.sectionId||'',preferenceRank:1,status:'pending',recommendationScore:82,recommendationReason:'Synthetic HOD review record for testing reassignment workflows.',proposedByAgent:true},
+      {syntheticKey:'synthetic-review-2',_id:'synthetic-review-2',facultyId:memoryFaculty[1].facultyId,courseId:memoryCourses[1].courseId,sectionId:memoryCourses[1].sections?.[0]?.sectionId||'',preferenceRank:2,status:'pending',recommendationScore:76,recommendationReason:'Synthetic HOD review record for testing reassignment workflows.',proposedByAgent:true}
+    ]
+  : [];
+
+export const memoryRequests = [...datasetRequests, ...syntheticRequests];
+
 const autoConflicts = memoryCourses.map(c => {
   const count = memoryRequests.filter(r => r.courseId === c.courseId && ['pending','recommended'].includes(r.status)).length;
   return count > 1 ? {
@@ -161,6 +182,35 @@ const autoConflicts = memoryCourses.map(c => {
   } : null;
 }).filter(Boolean);
 export const memory = { faculty: memoryFaculty, courses: memoryCourses, conflicts: autoConflicts };
+export const defaultAllocationConfig = {
+  department: 'CSE',
+  weights: {expertise:35, publication:15, qualification:20, preference:15, continuity:10, feedback:5},
+  maxWorkload: 18
+};
+let localAllocationConfig = {...defaultAllocationConfig, weights:{...defaultAllocationConfig.weights}};
+
+export async function getAllocationConfig(department='CSE') {
+  if (dbReady()) {
+    const Config = (await import('../models/AllocationConfig.js')).default;
+    return (await Config.findOne({department}).lean()) || defaultAllocationConfig;
+  }
+  return localAllocationConfig;
+}
+
+export async function saveAllocationConfig(input, updatedBy='') {
+  const config = {
+    department: input.department || 'CSE',
+    weights: {...defaultAllocationConfig.weights, ...(input.weights || {})},
+    maxWorkload: Number(input.maxWorkload) || defaultAllocationConfig.maxWorkload,
+    updatedBy
+  };
+  if (dbReady()) {
+    const Config = (await import('../models/AllocationConfig.js')).default;
+    return Config.findOneAndUpdate({department:config.department}, {$set:config}, {upsert:true,new:true,runValidators:true}).lean();
+  }
+  localAllocationConfig = config;
+  return localAllocationConfig;
+}
 
 export async function allFaculty() {
   return dbReady()
@@ -218,7 +268,12 @@ export async function courseRequests(courseId) {
 }
 
 export async function pendingAllocations() {
-  if (dbReady()) return (await import('../models/Allocation.js')).default.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+  if (dbReady()) {
+    const facultyIds = new Set((await allFaculty()).map(f => f.facultyId));
+    const Allocation = (await import('../models/Allocation.js')).default;
+    if (facultyIds.size) await Allocation.deleteMany({facultyId:{$nin:[...facultyIds]}});
+    return Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+  }
   return memoryRequests.filter(r=>['pending','recommended'].includes(r.status));
 }
 

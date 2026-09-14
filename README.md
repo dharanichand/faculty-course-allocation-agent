@@ -1,115 +1,59 @@
-# Faculty Course Allocation Agent — Dataset Integrated
+# Phase 1 (Security & Correctness) — Changed Files
 
-Full-stack React/Vite + Express faculty-course allocation dashboard with:
-- Large college-aligned synthetic dataset
-- Faculty/course/request/workload pages
-- Agentic AI chat with Groq/OpenAI-compatible tool calling
-- Deterministic recommendation scoring
-- What-if simulation without database mutation
-- HOD human-in-the-loop approve/reject/override
-- Conflict detection and resolution
-- Local dataset mode by default
-- Optional MongoDB persistence mode
+Drop these files into your project at the matching paths, overwriting the
+existing ones. Directory structure in this zip mirrors the project root
+(`server/...`, `client/...`).
 
-## Run
+## Files included (new or modified)
 
-Requirements: Node.js 18+.
+- `server/src/config/secrets.js` — **new**. Central `getJwtSecret()` helper;
+  throws if `JWT_SECRET` is unset instead of falling back to a hardcoded
+  default.
+- `server/src/middleware/validate.js` — **new**. Generic zod-based request
+  validation middleware.
+- `server/src/validation/schemas.js` — **new**. Zod schemas for every
+  `/api/auth` and `/api/allocations` route body/params.
+- `server/src/middleware/auth.js` — **modified**. Uses `getJwtSecret()`
+  instead of a hardcoded fallback.
+- `server/src/routes/auth.js` — **modified**. `/demo` now gated behind
+  `ALLOW_DEMO_LOGIN=true` (default false, returns 404 otherwise); all routes
+  validated with zod.
+- `server/src/routes/allocations.js` — **modified**. Added zod validation to
+  bulk-approve, bulk-reject, approve, reject, and override routes.
+- `server/src/index.js` — **modified**. Asserts `JWT_SECRET` is configured at
+  startup (exits with a clear error if not); added a dedicated, stricter
+  rate limiter for `/api/auth/*`.
+- `server/package.json` — **modified**. Added `zod` as an explicit dependency
+  (run `npm install` in `server/` after copying).
+- `server/.env.example` — **modified**. Rewritten to cover every env var
+  actually used in the code, with placeholders only; adds `ALLOW_DEMO_LOGIN`.
+- `client/src/api.js` — **modified**. Removed automatic, credential-free
+  token minting via `/api/auth/demo` on every API call (this was silently
+  bypassing the login screen). Now redirects to `/login` if there's no
+  stored token.
+- `client/src/pages/AgentChat.jsx` — **modified**. Same fix as `api.js`,
+  applied to this page's separate token-fetching code path.
 
-From the project root:
+## Files to DELETE from your project (not included — there's nothing to copy)
 
-```bash
-npm run install:all
-```
+These were unused, duplicate Mongoose-only data-access files, never imported
+by any route or by `agentTools.js` (confirmed via grep — they only imported
+each other). Delete them:
 
-Keep your own existing `server/.env`. Do NOT create or commit a new secrets file.
+- `server/src/tools/facultyTools.js`
+- `server/src/tools/courseTools.js`
+- `server/src/tools/conflictTools.js`
+- `server/src/tools/workloadTools.js`
+- `server/src/tools/historyTools.js`
 
-Start backend:
+## After applying
 
-```bash
-npm run dev:server
-```
-
-Start frontend in a second terminal:
-
-```bash
-npm run dev:client
-```
-
-Open the Vite URL, normally:
-
-```text
-http://localhost:5173
-```
-
-## Dataset
-
-The project already contains the large dataset under:
-
-```text
-server/data/
-```
-
-Important files include:
-
-- `faculty.csv` — 120 faculty
-- `faculty_expertise.csv` — faculty expertise records
-- `course.csv` — 70 courses
-- `course_version.csv` — course-version records
-- `course_offering.csv` — 300 offerings
-- `section.csv` — sections
-- `batch.csv` — batches
-- `faculty_workload.csv` — workload metrics
-- `faculty_allocation_candidates.csv` — 1,500 agent allocation candidates
-- `department.csv`, `person.csv`, `programme.csv`, `regulation.csv`, `academic_year.csv`, `term.csv`
-- `agent.csv`, `agent_tool.csv`
-
-The backend automatically loads the CSV dataset in local-memory mode. You do not need to manually import the CSV files into MongoDB to use the project.
-
-## Agent
-
-The agent uses Groq through the OpenAI-compatible API interface.
-
-Your own `server/.env` should contain your Groq configuration, including your secret API key and optionally the model/base URL settings you already use.
-
-The application falls back to deterministic local tool answers when `GROQ_API_KEY` is absent, so the dashboard and allocation workflow still work.
-
-The agent never finalizes an allocation. HOD approval remains the final step.
-
-## MongoDB
-
-Dataset mode is the default because it makes the supplied college-aligned dataset immediately usable.
-
-If you specifically want MongoDB-backed application data, set:
-
-```env
-DATA_SOURCE=mongodb
-```
-
-and provide your own valid `MONGO_URI`.
-
-## Agent workflow
-
-```text
-User
-  ↓
-Agent
-  ↓
-Tool selection
-  ↓
-Faculty / Course / Workload / Request data
-  ↓
-Deterministic scoring
-  ↓
-Recommendation
-  ↓
-Conflict + constraint checks
-  ↓
-HOD Review
-  ↓
-Approve / Reject / Override
-```
-
-## Security
-
-Never commit or share API keys, MongoDB credentials, or JWT secrets.
-Keep secrets only in your own `server/.env`.
+1. `cd server && npm install` (picks up the new `zod` dependency).
+2. Make sure `server/.env` has a real `JWT_SECRET` set — the server will now
+   refuse to start without one. Compare against the updated
+   `server/.env.example` for the full list of variables the code uses.
+3. Do **not** set `ALLOW_DEMO_LOGIN=true` in any shared/staging/production
+   environment — leave it unset or `false` there. It's only for local dev.
+4. Rotate the credentials that were in your original `server/.env`
+   (MongoDB Atlas password, Groq API key, Brevo API key, JWT secret) if you
+   haven't already — they were exposed in the zip you shared earlier.

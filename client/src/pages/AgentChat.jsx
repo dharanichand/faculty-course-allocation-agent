@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Send, Sparkles, ShieldCheck, Wand2, Database, GitBranch, Loader2, AlertCircle, Mic } from 'lucide-react';
 import { Card, PageTitle, Badge } from '../components/UI';
+import { getStoredToken } from '../api';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -81,13 +82,17 @@ export default function AgentChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function getToken() {
-    const cached = sessionStorage.getItem('allocation_demo_token');
-    if (cached) return cached;
-    const r = await axios.post(`${API}/auth/demo`, {}, { timeout: 10000 });
-    if (!r.data?.token) throw new Error('Backend did not return an authentication token.');
-    sessionStorage.setItem('allocation_demo_token', r.data.token);
-    return r.data.token;
+  // RULE (security): never silently mint a token here. If the user isn't
+  // signed in (no token from a real /auth/login, or an explicit, server-gated
+  // /auth/demo the person opted into on the Login screen), send them to
+  // /login instead of auto-authenticating as HOD.
+  function getToken() {
+    const cached = getStoredToken();
+    if (!cached) {
+      window.location.assign('/login');
+      throw new Error('Not signed in.');
+    }
+    return cached;
   }
 
   function stamp() {
@@ -157,10 +162,10 @@ export default function AgentChat() {
             <div className="text-xs text-slate-500 mt-1">Ask me about faculty, courses, requests, workload &amp; conflicts</div>
           </div>
 
-          <div className="flex-1 p-5 space-y-4 overflow-auto">
+          <div className="flex-1 p-5 space-y-4 overflow-auto bg-sky-50/70">
             {messages.map((m, i) => (
               <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : ''}`}>
-                <div className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm ${m.role === 'user' ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white' : 'bg-slate-50 border border-slate-200 text-slate-700'}`}>
+                <div className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm ${m.role === 'user' ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white' : 'bg-white border border-sky-200 text-slate-700'}`}>
                   <div className={`flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-wider mb-1 ${m.role === 'user' ? 'text-blue-100' : 'text-blue-600'}`}>
                     <span className="flex items-center gap-1.5">{m.role === 'ai' && <Sparkles size={12} />}{m.role === 'user' ? 'You' : 'Assistant'}</span>
                     {m.time && <span className={`font-medium normal-case ${m.role === 'user' ? 'text-blue-100/80' : 'text-slate-400'}`}>{m.time}</span>}
@@ -178,7 +183,7 @@ export default function AgentChat() {
                 </div>
               </div>
             ))}
-            {loading && <div className="flex gap-3"><div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm text-blue-600 flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> Agent is analyzing verified data…</div></div>}
+            {loading && <div className="flex gap-3"><div className="bg-white border border-sky-200 rounded-2xl px-4 py-3 text-sm text-blue-600 flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> Agent is analyzing verified data…</div></div>}
             <div ref={endRef} />
           </div>
 

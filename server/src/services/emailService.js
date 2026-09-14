@@ -110,6 +110,68 @@ export async function sendAllocationDecisionEmail({
   });
 }
 
+// Sent to a faculty member the moment they are newly assigned/reassigned to a
+// course, including changes made after the semester has already started.
+export async function sendReassignmentEmail({
+  email,
+  name,
+  courseId,
+  courseName,
+  sectionId = '',
+  previousFacultyName = '',
+  reason = ''
+}) {
+  const subject = `Course assignment updated: ${courseId}`;
+  return sendBrevoEmail({
+    toEmail: email,
+    toName: name,
+    subject,
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#172033;max-width:620px;margin:auto">
+        <h2 style="color:#1d4ed8">Course Assignment Updated</h2>
+        <p>Hello ${escapeHtml(name || 'Faculty Member')},</p>
+        <p>You have been assigned to teach the following course${sectionId ? `, section <strong>${escapeHtml(sectionId)}</strong>` : ''}:</p>
+        <p><strong>Course:</strong> ${escapeHtml(courseId || '')} — ${escapeHtml(courseName || '')}</p>
+        ${previousFacultyName ? `<p>This assignment replaces the previous faculty, <strong>${escapeHtml(previousFacultyName)}</strong>.</p>` : ''}
+        ${reason ? `<p><strong>Reason for update:</strong> ${escapeHtml(reason)}</p>` : ''}
+        <p>Please review the updated timetable and reach out to the HOD office if you have any questions.</p>
+        <p style="color:#64748b">This is an automated message from the Faculty Course Allocation Agent.</p>
+      </div>
+    `,
+    textContent: `You have been assigned to teach ${courseId} - ${courseName}${sectionId ? ` (section ${sectionId})` : ''}.${previousFacultyName ? ` This replaces ${previousFacultyName}.` : ''}${reason ? ` Reason: ${reason}` : ''}`
+  });
+}
+
+// Sent to the faculty member who is being taken off a course because it was
+// reassigned to someone else after the initial allocation.
+export async function sendUnassignmentEmail({
+  email,
+  name,
+  courseId,
+  courseName,
+  newFacultyName = '',
+  reason = ''
+}) {
+  const subject = `Course assignment updated: ${courseId}`;
+  return sendBrevoEmail({
+    toEmail: email,
+    toName: name,
+    subject,
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#172033;max-width:620px;margin:auto">
+        <h2 style="color:#b45309">Course Assignment Updated</h2>
+        <p>Hello ${escapeHtml(name || 'Faculty Member')},</p>
+        <p>Your assignment to <strong>${escapeHtml(courseId || '')} — ${escapeHtml(courseName || '')}</strong> has been changed by the HOD.</p>
+        ${newFacultyName ? `<p>This course has been reassigned to <strong>${escapeHtml(newFacultyName)}</strong>.</p>` : ''}
+        ${reason ? `<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>` : ''}
+        <p>Please reach out to the HOD office if you have any questions about your revised workload.</p>
+        <p style="color:#64748b">This is an automated message from the Faculty Course Allocation Agent.</p>
+      </div>
+    `,
+    textContent: `Your assignment to ${courseId} - ${courseName} has changed.${newFacultyName ? ` It has been reassigned to ${newFacultyName}.` : ''}${reason ? ` Reason: ${reason}` : ''}`
+  });
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')

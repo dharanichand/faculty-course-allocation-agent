@@ -102,12 +102,11 @@ h1,h2,h3{font-family:"Space Grotesk",Inter,ui-sans-serif,sans-serif}
 @keyframes floaty{0%,100%{transform:translateY(0px)}50%{transform:translateY(-10px)}}
 @keyframes blobshift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(14px,-10px) scale(1.06)}}
 @keyframes orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@keyframes orbit-rev{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
+@keyframes orbit-rev{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(-360deg)}}
 @keyframes pulseGlow{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
-.hero-blob{position:absolute;border-radius:999px;filter:blur(38px);animation:blobshift 9s ease-in-out infinite}
-.hero-float{animation:floaty 5.5s ease-in-out infinite}
-.hero-orbit{animation:orbit 24s linear infinite}
-.hero-orbit-rev{animation:orbit-rev 24s linear infinite}
+.hero-blob{position:absolute;border-radius:999px;filter:blur(38px);animation:blobshift 9s ease-in-out infinite;pointer-events:none}
+.hero-orbit{animation:orbit 24s linear infinite;transform-origin:center center;will-change:transform}
+.hero-orbit-rev{animation:orbit-rev 24s linear infinite;transform-origin:center center;will-change:transform}
 .hero-node{animation:pulseGlow 3.2s ease-in-out infinite}
 
 /* ---- general hover polish ---- */

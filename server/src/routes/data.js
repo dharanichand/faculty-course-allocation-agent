@@ -4,13 +4,16 @@ import mongoose from 'mongoose';
 import Faculty from '../models/Faculty.js';
 import Course from '../models/Course.js';
 import Conflict from '../models/Conflict.js';
+import Allocation from '../models/Allocation.js';
 import AuditLog from '../models/AuditLog.js';
-import { memory, memoryFaculty, memoryCourses, memoryRequests } from '../data/store.js';
+import { memory, memoryFaculty, memoryCourses, memoryRequests, getAllocationConfig, saveAllocationConfig, findFaculty } from '../data/store.js';
 
 const r = Router();
 
 const dbReady = () => mongoose.connection.readyState === 1 && process.env.DATA_SOURCE === 'mongodb';
 const uid = (prefix) => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}`.toUpperCase();
+
+const canEditConfig = user => ['hod','dean'].includes(user?.role);
 
 
 
@@ -26,9 +29,13 @@ r.post('/faculty', auth, role('hod'), async (req,res) => {
     const body = req.body || {};
     if (!body.name) return res.status(400).json({message:'Faculty name is required'});
     if (!body.facultyId || !String(body.facultyId).trim()) return res.status(400).json({message:'Faculty ID is required'});
+    const email = String(body.email || '').trim();
+    if (!email) return res.status(400).json({message:'Faculty email is required'});
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({message:'Enter a valid faculty email address'});
     const item = {
       facultyId: String(body.facultyId).trim(),
       name: body.name,
+      email,
       department: body.department || 'CSE',
       designation: body.designation || 'Assistant Professor',
       qualifications: Array.isArray(body.qualifications) ? body.qualifications : [],
@@ -66,12 +73,88 @@ r.put('/faculty/:id', auth, role('hod'), async (req,res) => {
   } catch(e) { res.status(400).json({message:e.message}); }
 });
 
+r.get('/faculty/:id/preferences', auth, async (req,res) => {
+  try {
+    if (req.user.role !== 'hod' && req.user.role !== 'dean' && req.user.facultyId !== req.params.id) return res.status(403).json({message:'You may only view your own preferences'});
+    const faculty = await findFaculty(req.params.id);
+    if (!faculty) return res.status(404).json({message:'Faculty not found'});
+    res.json({facultyId:faculty.facultyId,preferences:faculty.preferences||[]});
+  } catch(e) { res.status(500).json({message:e.message}); }
+});
+
+r.put('/faculty/:id/preferences', auth, async (req,res) => {
+  try {
+    if (req.user.role !== 'hod' && req.user.role !== 'dean' && req.user.facultyId !== req.params.id) return res.status(403).json({message:'You may only update your own preferences'});
+    const preferences = Array.isArray(req.body?.preferences) ? req.body.preferences.filter(p => p?.courseId && Number(p.rank) > 0).map(p => ({courseId:String(p.courseId),rank:Number(p.rank)})) : null;
+    if (!preferences) return res.status(400).json({message:'preferences must be an array of courseId and positive rank values'});
+    if (dbReady()) {
+      const faculty = await Faculty.findOneAndUpdate({facultyId:req.params.id},{$set:{preferences}},{new:true}).lean();
+      if (!faculty) return res.status(404).json({message:'Faculty not found'});
+      return res.json({facultyId:faculty.facultyId,preferences:faculty.preferences});
+    }
+    const faculty = memory.faculty.find(f => f.facultyId === req.params.id);
+    if (!faculty) return res.status(404).json({message:'Faculty not found'});
+    faculty.preferences = preferences;
+    res.json({facultyId:faculty.facultyId,preferences:faculty.preferences});
+  } catch(e) { res.status(400).json({message:e.message}); }
+});
+
+r.get('/allocation-config', auth, async (req,res) => {
+  try { res.json(await getAllocationConfig(String(req.query.department||'CSE'))); }
+  catch(e) { res.status(500).json({message:e.message}); }
+});
+
+r.put('/allocation-config', auth, async (req,res) => {
+  try {
+    if (!canEditConfig(req.user)) return res.status(403).json({message:'Only HOD or Dean can change allocation settings'});
+    const weights = req.body?.weights || {};
+    const values = Object.values(weights).map(Number);
+    if (values.some(v => !Number.isFinite(v) || v < 0) || Math.round(values.reduce((a,b)=>a+b,0)) !== 100) return res.status(400).json({message:'Scoring weights must be non-negative numbers totaling 100'});
+    if (!Number.isFinite(Number(req.body?.maxWorkload)) || Number(req.body.maxWorkload) <= 0) return res.status(400).json({message:'maxWorkload must be a positive number'});
+    res.json(await saveAllocationConfig({department:req.body.department,weights,maxWorkload:req.body.maxWorkload},req.user.id));
+  } catch(e) { res.status(400).json({message:e.message}); }
+});
+
 r.delete('/faculty/:id', auth, role('hod'), async (req,res) => {
   try {
+    const facultyId = req.params.id;
     const data = dbReady()
-      ? await Faculty.findOneAndUpdate({facultyId:req.params.id}, {$set:{status:'inactive'}}, {new:true}).lean()
-      : Object.assign(memory.faculty.find(x=>x.facultyId===req.params.id)||{}, {status:'inactive'});
+      ? await Faculty.findOneAndUpdate({facultyId}, {$set:{status:'inactive'}}, {new:true}).lean()
+      : Object.assign(memory.faculty.find(x=>x.facultyId===facultyId)||{}, {status:'inactive'});
     if (!data) return res.status(404).json({message:'Faculty not found'});
+
+    // Cascade the removal to any allocation requests tied to this faculty, so
+    // the "review count" (dashboard pie chart, HOD Review queue, Requests
+    // list, Courses "unassigned" filter) reflects the change everywhere
+    // rather than going stale:
+    //  - requests still awaiting a decision have nothing left to evaluate, so
+    //    they're dismissed.
+    //  - a request that was already approved (a subject was assigned to this
+    //    faculty) is reopened as pending so the course is correctly flagged
+    //    as needing HOD re-review/reassignment instead of quietly staying
+    //    "decided" for a faculty member who no longer exists.
+    if (dbReady()) {
+      await Allocation.updateMany(
+        { facultyId, status: { $in: ['pending','recommended'] } },
+        { $set: { status: 'rejected', overrideReason: 'Faculty removed from the system before review' } }
+      );
+      await Allocation.updateMany(
+        { facultyId, status: 'approved' },
+        { $set: { status: 'pending', recommendationReason: 'Previously assigned faculty was removed from the system. Needs reassignment.' }, $unset: { approvedBy: '', approvedAt: '' } }
+      );
+    } else {
+      for (const item of memoryRequests) {
+        if (item.facultyId !== facultyId) continue;
+        if (item.status === 'pending' || item.status === 'recommended') {
+          Object.assign(item, { status: 'rejected', overrideReason: 'Faculty removed from the system before review' });
+        } else if (item.status === 'approved') {
+          Object.assign(item, { status: 'pending', recommendationReason: 'Previously assigned faculty was removed from the system. Needs reassignment.' });
+          delete item.approvedBy;
+          delete item.approvedAt;
+        }
+      }
+    }
+
     res.json({ok:true});
   } catch(e) { res.status(400).json({message:e.message}); }
 });

@@ -1,45 +1,49 @@
 import React,{useEffect,useState} from 'react';
-import {Users,BookOpen,ClipboardCheck,AlertTriangle,GitBranch,CheckCircle2,BrainCircuit,ArrowUpRight,Bot,Sparkles} from 'lucide-react';
-import {Link} from 'react-router-dom';
-import {Card,Stat,Badge,Progress,AiPill,SectionHeader,Tilt3D} from '../components/UI';
+import {Users,BookOpen,ClipboardCheck,AlertTriangle,GitBranch,CheckCircle2,BrainCircuit,ArrowUpRight,Bot,Sparkles,Wand2,Loader2} from 'lucide-react';
+import {Link,useNavigate} from 'react-router-dom';
+import {Card,Stat,Badge,Progress,AiPill,SectionHeader,Tilt3D,Modal} from '../components/UI';
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,PieChart,Pie,Cell} from 'recharts';
 import {apiRequest} from '../api';
 
 const tooltipStyle={backgroundColor:'#ffffff',border:'1px solid #e2e8f0',borderRadius:12,fontSize:12,color:'#0f172a',boxShadow:'0 12px 30px -12px rgba(15,23,42,.25)'};
 
 // The four data domains orbiting the central AI agent node in the hero graphic.
+// Each node is a real button (a Link) so the graphic doubles as navigation.
 const orbitNodes=[
- {label:'Faculty',icon:Users,angle:-90,color:'#38bdf8'},
- {label:'Courses',icon:BookOpen,angle:0,color:'#a78bfa'},
- {label:'Requests',icon:ClipboardCheck,angle:90,color:'#34d399'},
- {label:'Conflicts',icon:GitBranch,angle:180,color:'#fb923c'},
+ {label:'Faculty',icon:Users,angle:-90,color:'#2563eb',to:'/faculty'},
+ {label:'Courses',icon:BookOpen,angle:0,color:'#7c3aed',to:'/courses'},
+ {label:'Requests',icon:ClipboardCheck,angle:90,color:'#0d9488',to:'/requests'},
+ {label:'Conflicts',icon:GitBranch,angle:180,color:'#ea580c',to:'/conflicts'},
 ];
 
+// Fixed canvas + a single responsive scale keeps every node's position,
+// spacing and size proportional at any screen size.
+const CANVAS=280, CENTER=140, RADIUS=104;
+
 function AgentOrbitGraphic(){
- const r=92;
- return <div className="relative w-full h-full min-h-[260px] flex items-center justify-center select-none">
-  <div className="hero-blob w-56 h-56 bg-blue-500/30 -top-6 -left-6"/>
-  <div className="hero-blob w-56 h-56 bg-fuchsia-500/20 bottom-0 right-0"/>
-  <svg className="absolute" width="260" height="260" viewBox="0 0 260 260">
-   <circle cx="130" cy="130" r={r} fill="none" stroke="rgba(255,255,255,.18)" strokeDasharray="3 7"/>
-   <circle cx="130" cy="130" r={r-28} fill="none" stroke="rgba(255,255,255,.1)"/>
-  </svg>
-  <div className="absolute w-full h-full hero-orbit" style={{maxWidth:260,maxHeight:260}}>
-   {orbitNodes.map(n=>{
-    const rad=n.angle*Math.PI/180;
-    const x=130+r*Math.cos(rad),y=130+r*Math.sin(rad);
-    const I=n.icon;
-    return <div key={n.label} className="absolute hero-orbit-rev" style={{left:x,top:y,transform:'translate(-50%,-50%)'}}>
-     <div className="hero-float flex flex-col items-center gap-1" style={{animationDelay:`${n.angle}ms`}}>
-      <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg backdrop-blur bg-white/95" style={{color:n.color}}><I size={19}/></div>
-      <span className="text-[10px] font-semibold text-white/90 bg-black/20 px-1.5 py-0.5 rounded-full">{n.label}</span>
-     </div>
-    </div>;
-   })}
-  </div>
-  <div className="relative z-10 hero-node">
-   <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-400 to-fuchsia-500 flex items-center justify-center shadow-2xl ring-4 ring-white/20">
-    <Bot size={32} className="text-white"/>
+ return <div className="relative w-full h-full min-h-[240px] flex items-center justify-center select-none overflow-visible">
+  <div className="relative scale-[0.72] sm:scale-90 lg:scale-100 origin-center" style={{width:CANVAS,height:CANVAS}}>
+   <svg className="absolute inset-0" width={CANVAS} height={CANVAS} viewBox={`0 0 ${CANVAS} ${CANVAS}`}>
+    <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="rgba(37,99,235,.16)" strokeDasharray="3 7"/>
+    <circle cx={CENTER} cy={CENTER} r={RADIUS-32} fill="none" stroke="rgba(37,99,235,.09)"/>
+   </svg>
+   <div className="absolute inset-0 hero-orbit">
+    {orbitNodes.map(n=>{
+     const rad=n.angle*Math.PI/180;
+     const x=CENTER+RADIUS*Math.cos(rad),y=CENTER+RADIUS*Math.sin(rad);
+     const I=n.icon;
+    return <div key={n.label} className="absolute hero-orbit-rev pointer-events-auto" style={{left:x,top:y}}>
+     <Link to={n.to} title={`Go to ${n.label}`} aria-label={`Go to ${n.label}`} className="group/node flex items-center gap-1.5 pl-1.5 pr-3.5 py-1.5 rounded-full bg-white border border-slate-200 shadow-md cursor-pointer transition-all hover:shadow-xl hover:border-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+       <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover/node:scale-110" style={{background:`${n.color}1a`,color:n.color}}><I size={16}/></span>
+       <span className="text-[12px] font-semibold text-slate-700 whitespace-nowrap">{n.label}</span>
+      </Link>
+     </div>;
+    })}
+   </div>
+   <div className="absolute inset-0 flex items-center justify-center z-10 hero-node pointer-events-none">
+    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-xl ring-4 ring-white">
+     <Bot size={22} className="text-white"/>
+    </div>
    </div>
   </div>
  </div>;
@@ -48,29 +52,75 @@ function AgentOrbitGraphic(){
 export default function Dashboard(){
 
  const [data,setData]=useState({faculty:0,courses:0,requests:0,pendingReview:0,workload:[],pending:[]});
+ const navigate=useNavigate();
  const [loading,setLoading]=useState(true); const [error,setError]=useState('');
  const load=async()=>{try{setLoading(true);const r=await apiRequest({method:'GET',url:'/allocations/dashboard'});setData(r.data)}catch(e){setError(e?.response?.data?.message||'Backend unavailable. Start the server and refresh.')}finally{setLoading(false)}};
  useEffect(()=>{load()},[]);
  const workload=data.workload||[]; const totalRequests=Number(data.requests||0); const pendingRequests=Number(data.pendingReview||0); const decidedRequests=Math.max(totalRequests-pendingRequests,0); const pieColors=['#f43f5e','#2563eb']; const pref=[{name:'Pending review',value:pendingRequests,color:pieColors[0]},{name:'Reviewed / decided',value:decidedRequests,color:pieColors[1]}]; const pieTotal=pendingRequests+decidedRequests||1;
 
- return <div className="grid-bg -m-4 sm:-m-7 p-4 sm:p-7 min-h-[calc(100vh-64px)]">
-  {error&&<div className="mb-4 p-3 rounded-xl alert-error text-sm">{error}</div>}
+ // ---- AI "Start Allocation" run: one button that hands every pending
+ // request to the Groq-backed classifier on the server (server/src/services/aiAllocation.js)
+ // and applies its verified decisions. No client-side allocation logic here —
+ // this just triggers the backend agent and shows what it did. ----
+ const [aiRunning,setAiRunning]=useState(false);
+ const [aiResult,setAiResult]=useState(null);
+ const [aiModalOpen,setAiModalOpen]=useState(false);
+ const [aiError,setAiError]=useState('');
+ const startAllocation=async()=>{
+  try{
+   setAiRunning(true);setAiError('');
+   const r=await apiRequest({method:'POST',url:'/allocations/run-ai'});
+   setAiResult(r.data);
+   setAiModalOpen(true);
+   load();
+  }catch(e){setAiError(e?.response?.data?.message||'AI allocation run failed. Check the backend connection.')}
+  finally{setAiRunning(false)}
+ };
 
-  {/* Hero: dark command-center banner with an animated agent/orbit graphic instead of a plain title row. */}
-  <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white">
-   <div className="grid lg:grid-cols-[1.2fr_1fr] items-center">
+ return <div className="grid-bg -m-4 sm:-m-7 p-4 sm:p-7 min-h-[calc(100vh-112px)]">
+  {error&&<div className="mb-4 p-3 rounded-xl alert-error text-sm">{error}</div>}
+  {aiError&&<div className="mb-4 p-3 rounded-xl alert-error text-sm">{aiError}</div>}
+
+  {/* Hero: light command-center banner (soft blue/white, matching the CSE Agentic AI Day
+      styling) with an animated agent/orbit graphic instead of a plain title row. */}
+  <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50 via-white to-blue-50 border border-blue-100">
+   {/* Soft ambient glow kept OUTSIDE the orbit graphic and at low opacity so it never
+       washes out or overlaps the orbit icons — this is what caused the earlier overlap. */}
+   <div className="hero-blob w-72 h-72 bg-blue-400/10 -top-16 -left-16"/>
+   <div className="hero-blob w-72 h-72 bg-cyan-400/10 -bottom-20 -right-10"/>
+   <div className="grid lg:grid-cols-[1.2fr_1fr] items-center relative">
     <div className="p-7 sm:p-10 relative z-10">
-     <div className="eyebrow text-blue-300"><span className="eyebrow-dot" style={{background:'#60a5fa',boxShadow:'0 0 10px 2px rgba(96,165,250,.6)'}}/>HOD COMMAND CENTER</div>
-     <h1 className="font-display text-2xl sm:text-4xl font-semibold tracking-tight mt-2">Faculty Course Allocation</h1>
-     <p className="text-sm sm:text-base text-slate-300 mt-3 max-w-xl leading-relaxed">One workspace for real faculty, courses, requests, conflicts and AI recommendations — the agent watches every domain shown in the graphic and surfaces what needs your decision.</p>
+     <div className="eyebrow text-blue-600"><span className="eyebrow-dot"/>HOD COMMAND CENTER</div>
+     <h1 className="font-display text-2xl sm:text-4xl font-semibold tracking-tight mt-2 text-slate-900">Faculty Course Allocation</h1>
+     <p className="text-sm sm:text-base text-slate-600 mt-3 max-w-xl leading-relaxed">One workspace for real faculty, courses, requests, conflicts and AI recommendations — the agent watches every domain shown in the graphic and surfaces what needs your decision.</p>
      <div className="flex flex-wrap items-center gap-3 mt-6">
-      <Link to="/review" className="inline-flex items-center px-4 py-2.5 rounded-xl btn-primary text-sm">Start allocation review</Link>
-      <Link to="/agent" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/20 text-white text-sm font-semibold hover:bg-white/10 transition"><Sparkles size={15}/> Ask the AI agent</Link>
+    <button type="button" onClick={()=>navigate('/review')} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-primary text-sm">
+     <Wand2 size={15}/> Start Allocation
+      </button>
+      <Link to="/review" className="inline-flex items-center px-4 py-2.5 rounded-xl btn-outline text-sm">Review queue</Link>
+      <Link to="/agent" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-outline text-sm"><Sparkles size={15}/> Ask the AI agent</Link>
      </div>
     </div>
-    <div className="relative h-64 lg:h-full min-h-[220px]"><AgentOrbitGraphic/></div>
+    <div className="relative h-64 lg:h-full min-h-[220px] z-10"><AgentOrbitGraphic/></div>
    </div>
   </div>
+
+  <Modal open={aiModalOpen} title="AI allocation run" onClose={()=>setAiModalOpen(false)}>
+   {aiResult&&<div>
+    <p className="text-sm text-slate-500 mb-3">{aiResult.coursesProcessed?`Processed ${aiResult.coursesProcessed} course${aiResult.coursesProcessed===1?'':'s'} with pending requests.`:'No pending requests were waiting for allocation.'}{!aiResult.aiConfigured&&' Groq API key not configured on the server — used the deterministic fallback instead.'}</p>
+    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+     {(aiResult.results||[]).map(r=><div key={r.courseId} className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+      <div className="flex items-center justify-between gap-2">
+       <b className="text-sm text-slate-800">{r.courseName}</b>
+       {r.decision==='auto_approved'?<Badge tone="green">Assigned</Badge>:<Badge tone="amber">Needs HOD review</Badge>}
+      </div>
+      {r.decision==='auto_approved'&&<div className="text-xs text-slate-600 mt-1">Assigned to <b>{r.approvedFacultyName}</b> · score {r.score}/100</div>}
+      <div className="text-xs text-slate-500 mt-1">{r.summary}</div>
+     </div>)}
+     {aiResult.coursesProcessed===0&&<div className="text-sm text-slate-500 py-6 text-center">Nothing to allocate right now — every request already has a decision.</div>}
+    </div>
+   </div>}
+  </Modal>
 
   <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mt-5">
    <Tilt3D><Link to="/faculty" className="block text-left"><Stat label="Total faculty" value={loading?'…':data.faculty} sub="Manage faculty" icon={Users}/></Link></Tilt3D>
@@ -89,7 +139,7 @@ export default function Dashboard(){
       <div className="text-[11px] text-slate-500">total requests</div>
      </div>
     </div>
-    <div className="grid grid-cols-2 gap-2 mt-2">{pref.map((x)=><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" key={x.name}><div className="flex items-center gap-1.5 text-[11px] text-slate-500"><span className="w-2 h-2 rounded-full" style={{background:x.color}}/>{x.name}</div><div className="font-display text-lg font-semibold text-slate-900 mt-0.5">{x.value} <span className="text-[11px] font-normal text-slate-500">· {Math.round((x.value/pieTotal)*100)}%</span></div></div>)}</div>
+    <div className="grid grid-cols-2 gap-2 mt-2">{pref.map((x)=><Link to={x.name==='Pending review'?'/review':'/requests'} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500" key={x.name}><div className="flex items-center gap-1.5 text-[11px] text-slate-500"><span className="w-2 h-2 rounded-full" style={{background:x.color}}/>{x.name}</div><div className="font-display text-lg font-semibold text-slate-900 mt-0.5">{x.value} <span className="text-[11px] font-normal text-slate-500">· {Math.round((x.value/pieTotal)*100)}%</span></div></Link>)}</div>
     <div className="mt-3 text-[11px] text-slate-500 leading-4"><b className="text-slate-600">Pending review</b> = requests waiting for HOD approval or rejection. <b className="text-slate-600">Reviewed / decided</b> = requests already processed.</div>
    </Card></Tilt3D>
   </div>

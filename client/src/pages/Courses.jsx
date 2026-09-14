@@ -1,11 +1,26 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {BookOpen,Clock3,Plus,Trash2,Trophy,Filter} from 'lucide-react';
+import {BookOpen,Clock3,Plus,Trash2,Trophy,Filter,Search,X,RefreshCcw,Loader2} from 'lucide-react';
 import {Card,PageTitle,Modal,Field,Badge,AskAgentButton} from '../components/UI';
 import {apiRequest} from '../api';
 
+// Multiple independent filters can be combined at once: a faculty-status
+// filter (chips below) plus a free-text search box across code/name/dept.
+const STATUS_FILTERS=[
+ {id:'all',label:'All courses'},
+ {id:'top',label:'Top faculty pick'},
+ {id:'approved',label:'HOD approved'},
+ {id:'unassigned',label:'No faculty yet'},
+];
+
 export default function Courses(){
  const [items,setItems]=useState([]),[requests,setRequests]=useState([]),[faculty,setFaculty]=useState([]),[open,setOpen]=useState(false),[error,setError]=useState('');
- const [topFilter,setTopFilter]=useState(false);
+ const [statusFilter,setStatusFilter]=useState('all');
+ const [search,setSearch]=useState('');
+ const [reassignFor,setReassignFor]=useState(null);
+ const [reassignFaculty,setReassignFaculty]=useState('');
+ const [reassignReason,setReassignReason]=useState('');
+ const [reassignBusy,setReassignBusy]=useState(false);
+ const [notice,setNotice]=useState('');
  const [form,setForm]=useState({code:'',name:'',credits:'4',theory:'3',lab:'0',hours:'5',sections:'A'});
 
  const load=async()=>{
@@ -38,8 +53,42 @@ export default function Courses(){
   return byCourse;
  },[requests]);
 
- const visibleItems=topFilter?items.filter(c=>topByCourse[c.courseId]):items;
  const topCount=items.filter(c=>topByCourse[c.courseId]).length;
+ const approvedCount=items.filter(c=>topByCourse[c.courseId]?.status==='approved').length;
+ const unassignedCount=items.filter(c=>!topByCourse[c.courseId]).length;
+ const filterCounts={all:items.length,top:topCount,approved:approvedCount,unassigned:unassignedCount};
+
+ const visibleItems=useMemo(()=>{
+  let out=items;
+  if(statusFilter==='top')out=out.filter(c=>topByCourse[c.courseId]);
+  else if(statusFilter==='approved')out=out.filter(c=>topByCourse[c.courseId]?.status==='approved');
+  else if(statusFilter==='unassigned')out=out.filter(c=>!topByCourse[c.courseId]);
+  const q=search.trim().toLowerCase();
+  if(q){
+   out=out.filter(c=>[c.courseCode,c.courseName,c.department,...(c.requiredExpertise||[])].filter(Boolean).join(' ').toLowerCase().includes(q));
+  }
+  return out;
+ },[items,statusFilter,search,topByCourse]);
+
+ const startReassign=(course,top)=>{
+  setNotice('');
+  setReassignFor(course.courseId);
+  setReassignFaculty(top?.facultyId||'');
+  setReassignReason('');
+ };
+ const cancelReassign=()=>{setReassignFor(null);setReassignFaculty('');setReassignReason('')};
+
+ const submitReassign=async(top)=>{
+  if(!top?._id||!reassignFaculty)return;
+  try{
+   setReassignBusy(true);setError('');
+   await apiRequest({method:'POST',url:`/allocations/${top._id}/override`,data:{facultyId:reassignFaculty,reason:reassignReason||'Faculty reassigned after semester start'}});
+   setNotice('Faculty reassigned. Both the previous and newly assigned faculty have been emailed.');
+   cancelReassign();
+   await load();
+  }catch(e){setError(e?.response?.data?.message||'Could not reassign faculty')}
+  finally{setReassignBusy(false)}
+ };
 
  const add=async()=>{
   if(!form.name.trim())return setError('Course name is required');
@@ -59,13 +108,21 @@ export default function Courses(){
  return <div>
   <PageTitle eyebrow="ACADEMIC CATALOG" title="Courses & Sections" desc="Course requirements, sections, student strength and teaching load used by the allocation agent." action={<button type="button" onClick={()=>setOpen(true)} className="px-4 py-2.5 rounded-xl btn-primary text-sm flex gap-2 items-center"><Plus size={17}/> Add course</button>}/>
   {error&&<div className="mb-4 p-3 rounded-xl alert-error text-sm">{error}</div>}
+  {notice&&<div className="mb-4 p-3 rounded-xl alert-success text-sm">{notice}</div>}
 
-  <div className="mb-4 flex items-center gap-2 flex-wrap">
-   <button type="button" onClick={()=>setTopFilter(v=>!v)} className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition hover:-translate-y-0.5 ${topFilter?'bg-amber-50 border-amber-300 text-amber-700':'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-    <Trophy size={14}/> {topFilter?'Showing sections with top faculty':'Filter: sections with top faculty'}
-    <Badge tone={topFilter?'amber':'slate'}>{topCount}</Badge>
-   </button>
-   {topFilter&&<button type="button" onClick={()=>setTopFilter(false)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-600"><Filter size={13}/> Clear filter</button>}
+  <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+   <div className="relative flex-1 max-w-sm">
+    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by code, name or department…" className="field-input w-full pl-9 pr-8 py-2.5 rounded-xl outline-none text-sm"/>
+    {search&&<button type="button" onClick={()=>setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14}/></button>}
+   </div>
+   <div className="flex items-center gap-2 flex-wrap">
+    <Filter size={14} className="text-slate-400 hidden sm:block"/>
+    {STATUS_FILTERS.map(f=><button key={f.id} type="button" onClick={()=>setStatusFilter(f.id)} className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition hover:-translate-y-0.5 ${statusFilter===f.id?'bg-amber-50 border-amber-300 text-amber-700':'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+     {f.id==='top'&&<Trophy size={13}/>} {f.label}
+     <Badge tone={statusFilter===f.id?'amber':'slate'}>{filterCounts[f.id]}</Badge>
+    </button>)}
+   </div>
   </div>
 
   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -95,13 +152,26 @@ export default function Courses(){
        <div className="text-sm font-semibold text-blue-700">{facultyName(top.facultyId)}</div>
        <div className="text-xs font-bold text-slate-500">{top.recommendationScore??'—'}{top.recommendationScore?'/100':''}</div>
       </div>
+      {top.status==='approved'&&reassignFor!==c.courseId&&<button type="button" onClick={()=>startReassign(c,top)} className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-800"><RefreshCcw size={12}/> Reassign faculty (allowed even after semester start)</button>}
+      {reassignFor===c.courseId&&<div className="mt-3 pt-3 border-t border-amber-200/70 space-y-2" onClick={e=>e.stopPropagation()}>
+       <select value={reassignFaculty} onChange={e=>setReassignFaculty(e.target.value)} className="field-input w-full px-3 py-2 rounded-lg text-xs">
+        <option value="">Select new faculty…</option>
+        {faculty.filter(f=>f.facultyId!==top.facultyId).map(f=><option key={f.facultyId} value={f.facultyId}>{f.name}</option>)}
+       </select>
+       <input value={reassignReason} onChange={e=>setReassignReason(e.target.value)} placeholder="Reason for change (optional)" className="field-input w-full px-3 py-2 rounded-lg text-xs"/>
+       <div className="flex gap-2">
+        <button type="button" disabled={!reassignFaculty||reassignBusy} onClick={()=>submitReassign(top)} className="flex-1 py-2 rounded-lg btn-primary text-xs disabled:opacity-40 flex items-center justify-center gap-1.5">{reassignBusy?<Loader2 size={13} className="animate-spin"/>:<RefreshCcw size={13}/>} Confirm reassignment</button>
+        <button type="button" disabled={reassignBusy} onClick={cancelReassign} className="btn-outline px-3 py-2 rounded-lg text-xs">Cancel</button>
+       </div>
+       <p className="text-[10px] text-slate-400 leading-4">The previous and newly assigned faculty are notified automatically by email.</p>
+      </div>}
      </div>:<div className="mt-3 text-[11px] text-slate-400">No faculty requests yet for this course.</div>}
      <div className="mt-3 flex justify-end">
       <AskAgentButton prompt={`Analyze ${c.courseCode||c.courseName} (${c.courseId}) and recommend the best faculty allocation across its sections.`} label="Ask agent about this course"/>
      </div>
     </Card>;
    })}
-   {!visibleItems.length&&<div className="col-span-full p-8 text-center text-sm text-slate-500">{topFilter?'No sections have a top faculty pick yet.':'No courses yet.'}</div>}
+   {!visibleItems.length&&<div className="col-span-full p-8 text-center text-sm text-slate-500">{search||statusFilter!=='all'?'No courses match your search and filters.':'No courses yet.'}</div>}
   </div>
 
   <Modal open={open} title="Add course" onClose={()=>setOpen(false)}>
