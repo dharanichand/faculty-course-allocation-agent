@@ -4,10 +4,10 @@ import {Bot,LockKeyhole,Mail,ArrowRight,ShieldCheck,Sparkles,GraduationCap,UserR
 const API=import.meta.env.VITE_API_URL||'http://localhost:5000/api';
 
 export default function Login(){
- const [email,setEmail]=useState(''); const [password,setPassword]=useState('');
+ const [email,setEmail]=useState('hod@college.edu'); const [password,setPassword]=useState('hod12345');
  const [role,setRole]=useState('hod');
  const [busy,setBusy]=useState(''); const [error,setError]=useState('');
- const chooseRole=nextRole=>{setRole(nextRole);setEmail('');setPassword('');setError('');};
+ const chooseRole=nextRole=>{setRole(nextRole);setEmail(nextRole==='hod'?'hod@college.edu':'faculty@college.edu');setPassword(nextRole==='hod'?'hod12345':'faculty12345');setError('');};
 
  const enter=(token,user)=>{sessionStorage.setItem('allocation_demo_token',token);sessionStorage.setItem('allocation_user',JSON.stringify(user));window.location.assign('/dashboard');};
 

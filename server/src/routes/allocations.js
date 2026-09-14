@@ -11,7 +11,7 @@ import {classifyCourseAllocation} from '../services/aiAllocation.js';
 import mongoose from 'mongoose';
 
 const r=Router();
-const dbReady=()=>mongoose.connection.readyState===1 && process.env.DATA_SOURCE==='mongodb';
+const dbReady=()=>mongoose.connection.readyState===1;
 
 // Best-effort email notifications: allocation decisions must never fail (or be
 // slowed down) because Brevo is unreachable or unconfigured, so every call is
@@ -102,7 +102,7 @@ r.get('/dashboard',auth,async(req,res)=>{
   const [fs,cs,ps]=await Promise.all([allFaculty(),allCourses(),pendingAllocations()]);
   const workload=fs.map(f=>({name:(f.name||'').replace(/^Dr\.\s*/,'').split(' ')[0],hours:Number(f.currentWorkload)||0,max:Number(f.maxWorkload)||18}));
   const conflicts=await pendingConflicts();
-  const requestsCount=dbReady()?await Allocation.countDocuments({status:{$in:['pending','recommended']}}):memoryRequests.filter(r=>['pending','recommended'].includes(r.status)).length;
+  const requestsCount=await Allocation.countDocuments({});
   res.json({faculty:fs.length,courses:cs.length,requests:requestsCount,pendingReview:ps.length,conflicts:conflicts.length,workload,pending:ps});
  }catch(e){res.status(500).json({message:e.message})}
 });

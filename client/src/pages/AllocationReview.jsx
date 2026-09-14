@@ -4,14 +4,15 @@ import {Card,PageTitle,Badge,AskAgentButton} from '../components/UI';
 import {apiRequest} from '../api';
 
 export default function AllocationReview(){
- const [items,setItems]=useState([]),[selected,setSelected]=useState(0),[selectedIds,setSelectedIds]=useState([]),[override,setOverride]=useState(false),[reason,setReason]=useState(''),[bulkReason,setBulkReason]=useState(''),[overrideFaculty,setOverrideFaculty]=useState(''),[faculty,setFaculty]=useState([]),[courses,setCourses]=useState([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ const [items,setItems]=useState([]),[totalRequests,setTotalRequests]=useState(0),[selected,setSelected]=useState(0),[selectedIds,setSelectedIds]=useState([]),[override,setOverride]=useState(false),[reason,setReason]=useState(''),[bulkReason,setBulkReason]=useState(''),[overrideFaculty,setOverrideFaculty]=useState(''),[faculty,setFaculty]=useState([]),[courses,setCourses]=useState([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
 
  const load=async()=>{
   try{
-   const [a,f,c]=await Promise.all([
+    const [a,f,c,dashboard]=await Promise.all([
     apiRequest({method:'GET',url:'/allocations'}),
     apiRequest({method:'GET',url:'/data/faculty'}),
-    apiRequest({method:'GET',url:'/data/courses'})
+     apiRequest({method:'GET',url:'/data/courses'}),
+     apiRequest({method:'GET',url:'/allocations/dashboard'})
    ]);
    const nextItems=a.data||[];
    setItems(nextItems);
@@ -19,6 +20,7 @@ export default function AllocationReview(){
    setSelected(i=>Math.min(i,Math.max(0,nextItems.length-1)));
    setFaculty(f.data||[]);
    setCourses(c.data||[]);
+    setTotalRequests(Number(dashboard.data?.requests)||0);
    if(nextItems.length)setOverrideFaculty(prev=>prev||nextItems[0]?.facultyId||'');
   }catch(e){setMessage(e?.response?.data?.message||'Could not load review requests.')}
  };
@@ -86,12 +88,12 @@ export default function AllocationReview(){
  return <div className="pb-24">
   <PageTitle eyebrow="HUMAN-IN-THE-LOOP" title="HOD Allocation Review" desc="AI recommends; the HOD decides. Review one faculty request at a time."/>
   {message&&<div className="mb-4 p-3 rounded-xl alert-info text-sm">{message}</div>}
-  <Card className="mb-4 p-4">
+    <Card className="mb-4 p-4">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
      <input type="checkbox" checked={allSelected} onChange={toggleAll} className="sr-only"/>
      {allSelected?<CheckSquare size={19} className="text-fuchsia-700"/>:<Square size={19} className="text-slate-400"/>}
-     Select all ({items.length})
+    Select all reviews ({items.length})
     </label>
     <div className="flex flex-wrap items-center gap-2">
      <span className="text-xs text-slate-500">{selectedIds.length} selected</span>
@@ -113,13 +115,13 @@ export default function AllocationReview(){
       <h2 className="font-display text-xl font-semibold mt-1 text-slate-800">Allocation candidate</h2>
       <p className="text-sm text-slate-500 mt-1">Faculty request from {name(current.facultyId)} • Preference #{current.preferenceRank||1}</p>
      </div>
-     <div className="flex items-center gap-2"><span className="text-xs text-slate-500">Request {selected+1} of {items.length}</span><Badge tone="red">Pending review</Badge><AskAgentButton prompt={`What happens if I assign ${name(current.facultyId)} (${current.facultyId}) to ${courseName} (${current.courseId})? Check workload and conflicts before I decide.`} label="Ask agent"/></div>
+    <div className="flex items-center gap-2"><span className="text-xs text-slate-500">Review {selected+1} of {items.length}</span><Badge tone="red">Pending review</Badge><AskAgentButton prompt={`What happens if I assign ${name(current.facultyId)} (${current.facultyId}) to ${courseName} (${current.courseId})? Check workload and conflicts before I decide.`} label="Ask agent"/></div>
     </div>
    </div>
    <div className="p-5">
     <div className="flex items-center gap-2 text-sm font-bold mb-4 text-slate-700"><Sparkles size={17} className="text-fuchsia-700"/> AI recommendation: <span className="text-fuchsia-700">{name(current.facultyId)}</span></div>
     <div className="p-5 rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/5">
-     <div className="flex justify-between"><div><div className="font-semibold text-slate-800">{name(current.facultyId)}</div><div className="text-xs text-slate-500 mt-1">Faculty ID: {current.facultyId}</div></div><div className="text-right"><div className="font-display text-2xl font-bold text-slate-900">{current.recommendationScore??'—'}<span className="text-xs font-semibold text-slate-500">/100</span></div><Badge tone="green">Recommended</Badge></div></div>
+    <div className="flex justify-between"><div><div className="font-semibold text-slate-800">{name(current.facultyId)}</div><div className="text-xs text-slate-500 mt-1">Faculty ID: {current.facultyId}</div></div><div className="text-right"><div className="font-display text-2xl font-bold text-slate-900">{current.recommendationScore??'—'}<span className="text-xs font-semibold text-slate-500">/100</span></div><Badge tone="green">Recommended</Badge></div></div>
      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-5 text-xs">
       <div className="p-2.5 bg-slate-50 rounded-lg"><GraduationCap size={14} className="text-cyan-700 mb-1"/><span className="text-slate-500">Qualification</span><b className="block text-slate-700">Verified</b></div>
       <div className="p-2.5 bg-slate-50 rounded-lg"><Scale size={14} className="text-cyan-700 mb-1"/><span className="text-slate-500">Expertise</span><b className="block text-slate-700">Verified</b></div>

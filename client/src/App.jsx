@@ -3,6 +3,7 @@ import {NavLink,useLocation,useNavigate} from 'react-router-dom';
 import {Routes,Route} from 'react-router-dom';
 import {LayoutDashboard,BookOpen,Users,GitBranch,BrainCircuit,ClipboardCheck,ShieldCheck,FileText,Settings,Bot,LogOut,SlidersHorizontal,UserCheck} from 'lucide-react';
 import Dashboard from './pages/Dashboard';
+import FacultyDashboard from './pages/FacultyDashboard';
 import Requests from './pages/Requests';
 import Faculty from './pages/Faculty';
 import FacultyProfile from './pages/FacultyProfile';
@@ -81,7 +82,7 @@ function App(){
 
   <div className="h-screen overflow-hidden" style={{paddingTop:HEADER_H}}>
   {user?.role!=='faculty'&&loc.pathname!=='/agent'&&loc.pathname!=='/agent/chat'&&<button type="button" onClick={()=>navigate('/agent')} title="Ask the AI Allocation Agent" className={`fixed z-40 right-6 flex items-center gap-2 pl-3 pr-4 py-3 rounded-full btn-primary ${loc.pathname==='/review'?'bottom-24':'bottom-6'}`}><Bot size={19}/><span className="text-sm font-semibold hidden sm:inline">Ask AI Agent</span></button>}
-   <main className="h-[calc(100vh-112px)] overflow-y-auto overscroll-contain p-4 sm:p-7 max-w-[1600px] mx-auto"><PageErrorBoundary><Routes><Route path="/" element={<Dashboard/>}/><Route path="/dashboard" element={<Dashboard/>}/><Route path="/requests" element={<Requests/>}/><Route path="/faculty-requests" element={<Requests/>}/>
+  <main className="h-[calc(100vh-112px)] overflow-y-auto overscroll-contain p-4 sm:p-7 max-w-[1600px] mx-auto"><PageErrorBoundary><Routes><Route path="/" element={user?.role==='faculty'?<FacultyDashboard/>:<Dashboard/>}/><Route path="/dashboard" element={user?.role==='faculty'?<FacultyDashboard/>:<Dashboard/>}/><Route path="/requests" element={<Requests/>}/><Route path="/faculty-requests" element={<Requests/>}/>
             <Route path="/faculty" element={user?.role==='faculty'?<FacultyProfile/>:<Faculty/>}/><Route path="/courses" element={<Courses/>}/><Route path="/courses-sections" element={<Courses/>}/><Route path="/conflicts" element={<Conflicts/>}/><Route path="/review" element={<AllocationReview/>}/><Route path="/hod-review" element={<AllocationReview/>}/><Route path="/agent" element={<AgentChat/>}/><Route path="/agent/chat" element={<AgentChat/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/preferences" element={<Preferences/>}/><Route path="/my-allocation" element={<MyAllocation/>}/></Routes></PageErrorBoundary></main>
   </div>
  </div>

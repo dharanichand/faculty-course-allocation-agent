@@ -10,7 +10,7 @@ import { memory, memoryFaculty, memoryCourses, memoryRequests, getAllocationConf
 
 const r = Router();
 
-const dbReady = () => mongoose.connection.readyState === 1 && process.env.DATA_SOURCE === 'mongodb';
+const dbReady = () => mongoose.connection.readyState === 1;
 const uid = (prefix) => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}`.toUpperCase();
 
 const canEditConfig = user => ['hod','dean'].includes(user?.role);
