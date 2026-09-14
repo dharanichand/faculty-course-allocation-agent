@@ -46,7 +46,12 @@ async function seedMongo(){
   ]);
   if(!facultyCount && memory.faculty.length) await Faculty.insertMany(memory.faculty,{ordered:false});
   for(const faculty of memoryFaculty) await Faculty.updateOne({facultyId:faculty.facultyId},{$set:{publications:faculty.publications,preferences:faculty.preferences,maxWorkload:faculty.maxWorkload}});
-  if(process.env.DEMO_MODE==='true'){
+  // The placeholder HOD/faculty accounts shown on the login screen
+  // (hod@college.edu / faculty@college.edu) are seeded by default in every
+  // environment, local or deployed, so the credentials printed on the login
+  // page always work. Set SEED_DEMO_USERS=false to turn this off for a real
+  // production deployment with real accounts.
+  if(process.env.SEED_DEMO_USERS!=='false'){
    const defaultUsers=[
     {name:'Dr. Ananya Rao',email:'hod@college.edu',password:'hod12345',role:'hod'},
     {name:memoryFaculty[0]?.name||'Demo Faculty',email:'faculty@college.edu',password:'faculty12345',role:'faculty',facultyId:memoryFaculty[0]?.facultyId}
