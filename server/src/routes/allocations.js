@@ -102,7 +102,7 @@ r.get('/dashboard',auth,async(req,res)=>{
   const [fs,cs,ps]=await Promise.all([allFaculty(),allCourses(),pendingAllocations()]);
   const workload=fs.map(f=>({name:(f.name||'').replace(/^Dr\.\s*/,'').split(' ')[0],hours:Number(f.currentWorkload)||0,max:Number(f.maxWorkload)||18}));
   const conflicts=await pendingConflicts();
-  const requestsCount=dbReady()?await Allocation.countDocuments():memoryRequests.length;
+  const requestsCount=dbReady()?await Allocation.countDocuments({status:{$in:['pending','recommended']}}):memoryRequests.filter(r=>['pending','recommended'].includes(r.status)).length;
   res.json({faculty:fs.length,courses:cs.length,requests:requestsCount,pendingReview:ps.length,conflicts:conflicts.length,workload,pending:ps});
  }catch(e){res.status(500).json({message:e.message})}
 });
