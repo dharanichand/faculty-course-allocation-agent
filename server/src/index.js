@@ -4,10 +4,10 @@ import bcrypt from 'bcryptjs';
 import {assertJwtSecretConfigured} from './config/secrets.js';
 import Faculty from './models/Faculty.js';
 import Course from './models/Course.js';
-
+import Allocation from './models/Allocation.js';
 import Conflict from './models/Conflict.js';
 import User from './models/User.js';
-import {memory,memoryFaculty} from './data/store.js';
+import {memory,memoryFaculty,memoryRequests} from './data/store.js';
 import authRoutes from './routes/auth.js';import agentRoutes from './routes/agent.js';import allocationRoutes from './routes/allocations.js';import dataRoutes from './routes/data.js';import emailRoutes from './routes/email.js';
 
 // RULE (security): fail fast and loudly at boot rather than silently signing
@@ -41,8 +41,8 @@ const start=()=>app.listen(port,()=>console.log(`API running on ${port}`));
 
 async function seedMongo(){
   if(process.env.DATA_SOURCE!=='mongodb' || mongoose.connection.readyState!==1) return;
-  const [facultyCount,courseCount,conflictCount]=await Promise.all([
-    Faculty.countDocuments(),Course.countDocuments(),Conflict.countDocuments()
+  const [facultyCount,courseCount,allocationCount,conflictCount]=await Promise.all([
+    Faculty.countDocuments(),Course.countDocuments(),Allocation.countDocuments(),Conflict.countDocuments()
   ]);
   if(!facultyCount && memory.faculty.length) await Faculty.insertMany(memory.faculty,{ordered:false});
   for(const faculty of memoryFaculty) await Faculty.updateOne({facultyId:faculty.facultyId},{$set:{publications:faculty.publications,preferences:faculty.preferences,maxWorkload:faculty.maxWorkload}});
@@ -67,12 +67,12 @@ async function seedMongo(){
   }
   if(!courseCount && memory.courses.length) await Course.insertMany(memory.courses,{ordered:false});
   for(const course of memory.courses) await Course.updateOne({courseId:course.courseId},{$set:{requiredExpertise:course.requiredExpertise,requiredQualification:course.requiredQualification}});
-  // NOTE: Allocation candidates from the CSV are intentionally NOT seeded into
-  // MongoDB. Those 1500 rows are local-memory/demo data only. In MongoDB mode
-  // the allocations collection starts empty and is populated by the HOD running
-  // "Start AI Allocation" or by faculty submitting requests through the app.
+  // Seed only the real CSV allocation candidates (1500 rows), excluding the
+  // 2 synthetic test records which exist only for local in-memory testing.
+  const realRequests=memoryRequests.filter(r=>!r.syntheticKey);
+  if(!allocationCount && realRequests.length) await Allocation.insertMany(realRequests.map(({_id,...r})=>({...r,_id:undefined})),{ordered:false});
   if(!conflictCount && memory.conflicts.length) await Conflict.insertMany(memory.conflicts,{ordered:false});
-  console.log(`MongoDB seed check: faculty=${await Faculty.countDocuments()}, courses=${await Course.countDocuments()}, conflicts=${await Conflict.countDocuments()}`);
+  console.log(`MongoDB seed check: faculty=${await Faculty.countDocuments()}, courses=${await Course.countDocuments()}, allocations=${await Allocation.countDocuments()}, conflicts=${await Conflict.countDocuments()}`);
 }
 const mongoUri=process.env.MONGO_URI?.trim();
 if(!mongoUri || mongoUri.includes('YOUR_USERNAME') || mongoUri.includes('YOUR_PASSWORD') || mongoUri.includes('YOUR_CLUSTER')){
