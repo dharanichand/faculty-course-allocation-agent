@@ -1,9 +1,9 @@
 department_id,institution_id,department_code,name
-86c8b01b-dedf-4861-8f8c-1204eb171aa1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,CSE,Computer Science & Engineering
-b47462a1-5b6b-4294-9dc3-117c711dc720,e11c8eb4-1e0c-467f-8f98-796a9e24129c,AIML,Artificial Intelligence & Machine Learning
-26fc9393-044d-4d69-a9c0-767c33617683,e11c8eb4-1e0c-467f-8f98-796a9e24129c,ECE,Electronics & Communication Engineering
-1df2b133-a3ab-48c5-ad2f-319b96928c1f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,EEE,Electrical & Electronics Engineering
-9fbeeee0-e407-4e7a-8062-6471011d13bb,e11c8eb4-1e0c-467f-8f98-796a9e24129c,ME,Mechanical Engineering
-00f83339-0268-4296-a95c-71b715b267a1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,CE,Civil Engineering
-9c9396ed-93c3-4d33-bc89-3c097aecfbe2,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MCA,Master of Computer Applications
-81928c47-bf2a-4a49-9b66-4e3649e884c3,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MBA,Master of Business Administration
+b2a014e0-16d2-48bc-89bd-1e8222a90bac,e11c8eb4-1e0c-467f-8f98-796a9e24129c,CSE,Computer Science and Engineering
+ef59af18-780b-4f3f-b518-c020a3f76008,e11c8eb4-1e0c-467f-8f98-796a9e24129c,ECE,Electronics and Communication Engineering
+19c88429-ca3a-4e68-b4f8-fab1adf20ac0,e11c8eb4-1e0c-467f-8f98-796a9e24129c,EEE,Electrical and Electronics Engineering
+435ce33d-8826-4cae-a0ba-9cfc5ebd4a6f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,ME,Mechanical Engineering
+fdf5e9b3-106d-4471-914c-2869ff96e55a,e11c8eb4-1e0c-467f-8f98-796a9e24129c,CE,Civil Engineering
+ae83cb7c-7899-472d-9264-79cf285ee703,e11c8eb4-1e0c-467f-8f98-796a9e24129c,AIML,Artificial Intelligence and Machine Learning
+5b546b83-b432-4d59-8ee9-cf751aed229c,e11c8eb4-1e0c-467f-8f98-796a9e24129c,DS,Data Science
+12d9179d-8246-4f9f-b8b0-fd85d0be1665,e11c8eb4-1e0c-467f-8f98-796a9e24129c,HSS,Humanities and Social Sciences

@@ -1,5 +1,5 @@
 agent_tool_id,agent_id,tool_name,access_mode,resource_object
-b211f2b2-72a5-46d1-83c5-714f96a4c03d,64869f81-812f-4f8a-b205-69b003b577ce,search_faculty,READ,people.faculty
-a20fa315-35ce-48c2-be91-d3302d40be7d,64869f81-812f-4f8a-b205-69b003b577ce,search_courses,READ,curriculum.course
-6d408058-9fe3-4768-80f8-373eec79a8c5,64869f81-812f-4f8a-b205-69b003b577ce,check_workload,READ,hr.faculty_workload
-d1bbfe11-d265-4835-af46-ffe5dec0ec9c,64869f81-812f-4f8a-b205-69b003b577ce,recommend_allocation,WRITE,academics.faculty_allocation
+a7b5fab8-f8fd-4685-b141-8c887127b0c1,af62cd70-612f-461a-8df4-18c0a67dd485,recommend_faculty,READ,"faculty,course,workload"
+a850bf12-6e40-4ec8-ac7d-13e2097855e3,af62cd70-612f-461a-8df4-18c0a67dd485,select_best_course_for_faculty,READ,"faculty,course,allocation"
+79264570-8695-48dc-ba20-7a1238524651,af62cd70-612f-461a-8df4-18c0a67dd485,get_allocation_context,READ,"allocation,conflict,workload"
+4dcbf8a4-3825-4f00-8e58-ebbb48e355de,af62cd70-612f-461a-8df4-18c0a67dd485,propose_allocation,WRITE_REVIEW,allocation

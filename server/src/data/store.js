@@ -41,7 +41,7 @@ const publicationsByFaculty = new Map();
 for (const x of expertiseRows) {
   if (!expertiseByFaculty.has(x.faculty_id)) expertiseByFaculty.set(x.faculty_id, []);
   expertiseByFaculty.get(x.faculty_id).push(x.area);
-  if (String(x.source || '').toUpperCase() === 'PUBLICATION') {
+  if (String(x.evidence_source || '').toUpperCase() === 'PUBLICATION') {
     if (!publicationsByFaculty.has(x.faculty_id)) publicationsByFaculty.set(x.faculty_id, []);
     publicationsByFaculty.get(x.faculty_id).push(x.area);
   }
@@ -60,7 +60,7 @@ function number(v, fallback=0) {
 function requiredExpertise(title='') {
   const t = title.toLowerCase();
   const rules = [
-    ['machine learning','Machine Learning'],['deep learning','Deep Learning'],['artificial intelligence','Artificial Intelligence'],
+    ['machine learning','Machine Learning'],['deep learning','Deep Learning'],['artificial intelligence','Artificial Intelligence'],['heat transfer','Thermodynamics'],['thermal','Thermodynamics'],['fluid mechanics','Fluid Mechanics'],
     ['natural language','Natural Language Processing'],['data mining','Data Mining'],['database','Database Systems'],
     ['cloud','Cloud Computing'],['cyber','Cyber Security'],['network','Networks'],['embedded','Embedded Systems'],
     ['vlsi','VLSI'],['power','Power Systems'],['control','Control Systems'],['thermodynamic','Thermodynamics'],
@@ -81,7 +81,7 @@ function normalizeFaculty(row) {
     ? ['Ph.D', q].filter(Boolean)
     : [q || 'M.Tech'];
   const current = number(workload.total_weighted_load);
-  const max = 18;
+  const max = 24;
   return {
     facultyId: row.faculty_id,
     name: person.full_name || row.employee_no,
@@ -126,7 +126,7 @@ function normalizeCourse(row) {
     labHours: number(relevant.practical_hours),
     tutorialHours: number(relevant.tutorial_hours),
     requiredExpertise: requiredExpertise(row.title),
-    requiredQualification: ['M.Tech'],
+    requiredQualification: ['M.Sc', 'M.Tech', 'M.E.', 'MCA', 'MBA', 'Ph.D'],
     sections: sections.length ? sections : [{sectionId:`${row.course_code}-A`,sectionName:'A',studentCount:studentStrength,hoursPerWeek:hours}],
     studentStrength,
     status: 'open'
@@ -136,6 +136,25 @@ function normalizeCourse(row) {
 const fileFaculty = facultyRows.map(normalizeFaculty);
 const fileCourses = courseRows.map(normalizeCourse);
 const validFacultyIds = new Set(fileFaculty.map(f => f.facultyId));
+const preferenceByFaculty = new Map();
+for (const row of candidateRows) {
+  const offering = offeringById.get(row.course_offering_id) || {};
+  const version = versionById.get(offering.course_version_id) || {};
+  const courseId = version.course_id;
+  if (!courseId || !validFacultyIds.has(row.faculty_id)) continue;
+  const fit = number(row.preference_fit);
+  const current = preferenceByFaculty.get(row.faculty_id) || [];
+  const existing = current.find(item => item.courseId === courseId);
+  if (!existing || fit > existing.fit) {
+    if (existing) existing.fit = fit;
+    else current.push({courseId,fit});
+  }
+  preferenceByFaculty.set(row.faculty_id, current);
+}
+for (const faculty of fileFaculty) {
+  faculty.preferences = (preferenceByFaculty.get(faculty.facultyId) || [])
+    .sort((a,b)=>b.fit-a.fit).slice(0,5).map((item,index)=>({courseId:item.courseId,rank:index+1}));
+}
 
 export const memoryFaculty = fileFaculty.length ? fileFaculty : [];
 export const memoryCourses = fileCourses.length ? fileCourses : [];
@@ -185,7 +204,7 @@ export const memory = { faculty: memoryFaculty, courses: memoryCourses, conflict
 export const defaultAllocationConfig = {
   department: 'CSE',
   weights: {expertise:35, publication:15, qualification:20, preference:15, continuity:10, feedback:5},
-  maxWorkload: 18
+  maxWorkload: 24
 };
 let localAllocationConfig = {...defaultAllocationConfig, weights:{...defaultAllocationConfig.weights}};
 

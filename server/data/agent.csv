@@ -1,2 +1,2 @@
 agent_id,agent_name,domain,agent_class,reasoning_policy,requires_human_approval,status,version
-64869f81-812f-4f8a-b205-69b003b577ce,Faculty Course Allocation Agent,ACADEMIC_ALLOCATION,DECISION_SUPPORT,ACT_WITH_APPROVAL,True,ACTIVE,1.0.0
+af62cd70-612f-461a-8df4-18c0a67dd485,Faculty Course Allocation Agent,ACADEMIC_ALLOCATION,LANGGRAPH_TOOL_AGENT,expertise+workload+availability+preference-conflict scoring with HOD review,True,ACTIVE,2.1.0

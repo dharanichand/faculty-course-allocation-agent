@@ -55,6 +55,23 @@ r.get('/my',auth,async(req,res)=>{
  }catch(e){res.status(500).json({message:e.message})}
 });
 
+r.get('/notifications',auth,async(req,res)=>{
+ try{
+  if(req.user.role!=='faculty'||!req.user.facultyId)return res.status(403).json({message:'Faculty access is required'});
+  const courses=new Map((await allCourses()).map(c=>[c.courseId,c]));
+  const rows=dbReady()?await Allocation.find({facultyId:req.user.facultyId}).sort({updatedAt:-1,createdAt:-1}).limit(30).lean():memoryRequests.filter(x=>x.facultyId===req.user.facultyId).slice(-30).reverse();
+  res.json(rows.map(item=>({
+   id:String(item._id),
+   type:item.status==='approved'?'success':item.status==='rejected'?'warning':'info',
+   title:item.status==='approved'?'Allocation approved':item.status==='rejected'?'Allocation update':'Review pending',
+   message:item.status==='approved'?`${courses.get(item.courseId)?.courseName||item.courseId} has been approved for you.`:item.status==='rejected'?(item.overrideReason||`Your request for ${courses.get(item.courseId)?.courseName||item.courseId} was not selected.`):`Your request for ${courses.get(item.courseId)?.courseName||item.courseId} is waiting for HOD review.`,
+   reason:item.recommendationReason||item.overrideReason||'',
+   courseId:item.courseId,
+   timestamp:item.updatedAt||item.createdAt||new Date().toISOString()
+  })));
+ }catch(e){res.status(500).json({message:e.message})}
+});
+
 r.get('/export',auth,role('hod','dean'),async(req,res)=>{
  try{
   const rows=dbReady()?await Allocation.find({status:'approved'}).sort({courseId:1}).lean():memoryRequests.filter(x=>x.status==='approved');
@@ -67,6 +84,16 @@ r.get('/export',auth,role('hod','dean'),async(req,res)=>{
    res.type('text/csv').attachment('approved_allocations.csv').send(csv); return;
   }
   res.json({generatedAt:new Date().toISOString(),approvedOnly:true,allocations:data});
+ }catch(e){res.status(500).json({message:e.message})}
+});
+
+r.get('/course/:courseId/candidates',auth,role('hod','dean'),async(req,res)=>{
+ try{
+  const rows=dbReady()?await Allocation.find({courseId:req.params.courseId,status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean():memoryRequests.filter(x=>x.courseId===req.params.courseId&&['pending','recommended'].includes(x.status));
+  const candidates=await Promise.all([...new Map(rows.map(row=>[row.facultyId,row])).values()].map(row=>calculateRecommendationScore(row.facultyId,req.params.courseId)));
+  candidates.sort((a,b)=>b.score-a.score);
+  const closeCall=candidates.length>1&&candidates[0].score-candidates[1].score<8;
+  res.json({courseId:req.params.courseId,closeCall,threshold:8,candidates});
  }catch(e){res.status(500).json({message:e.message})}
 });
 
@@ -242,6 +269,7 @@ r.post('/:id/approve',auth,role('hod'),validate({params:idParam}),async(req,res)
     status:{$in:['pending','recommended']}
    };
    await Allocation.updateMany(match,{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date()}});
+    await Allocation.updateMany({courseId:item.courseId,sectionId:item.sectionId,status:{$in:['pending','recommended']},_id:{$ne:item._id}},{$set:{status:'rejected',overrideReason:'Another candidate was selected by the HOD.'}});
    item=await Allocation.findById(req.params.id).lean();
    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(item._id),newValue:item});
    notifyDecision(item,'approved');
@@ -257,6 +285,9 @@ r.post('/:id/approve',auth,role('hod'),validate({params:idParam}),async(req,res)
     Object.assign(other,{status:'approved',approvedBy:req.user.id,approvedAt:new Date()});
    }
   }
+    for(const other of memoryRequests){
+     if(other._id!==item._id&&other.courseId===item.courseId&&other.sectionId===item.sectionId&&['pending','recommended'].includes(other.status))Object.assign(other,{status:'rejected',overrideReason:'Another candidate was selected by the HOD.'});
+    }
   notifyDecision(item,'approved');
   return res.json({ok:true,allocation:item,remaining:await pendingAllocations()});
  }catch(e){res.status(400).json({message:e.message})}

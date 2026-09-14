@@ -3,7 +3,7 @@ import Faculty from '../models/Faculty.js';
 import Course from '../models/Course.js';
 import Allocation from '../models/Allocation.js';
 import Conflict from '../models/Conflict.js';
-import { memoryFaculty, memoryCourses, memoryRequests, syntheticRequests, memory } from './store.js';
+import { memoryFaculty, memoryCourses, memoryRequests, memory } from './store.js';
 
 let seeded = false;
 
@@ -58,13 +58,6 @@ async function seedDatabase() {
     })), { ordered: false });
   }
 
-  for (const request of syntheticRequests) {
-    await Allocation.updateOne(
-      {syntheticKey:request.syntheticKey},
-      {$setOnInsert:{facultyId:request.facultyId,courseId:request.courseId,sectionId:request.sectionId,status:'pending',recommendationScore:request.recommendationScore,recommendationReason:request.recommendationReason,syntheticKey:request.syntheticKey,override:false}},
-      {upsert:true}
-    );
-  }
 
   const conflictCount = await Conflict.countDocuments();
   if (conflictCount === 0 && memory.conflicts.length) {

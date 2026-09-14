@@ -278,7 +278,7 @@ r.post('/requests', auth, async (req,res) => {
   }catch(e){res.status(400).json({message:e.message});}
 });
 
-r.get('/audit', auth, async (req,res)=>{
+r.get('/audit', auth, role('hod','dean'), async (req,res)=>{
   try {
     if (!dbReady()) return res.json([]);
     res.json(await AuditLog.find().sort({timestamp:-1}).limit(20).lean());

@@ -1,9 +1,10 @@
 programme_id,institution_id,degree,name,programme_code
-36864f3f-7338-45b8-8aa9-841b967276f0,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Computer Science & Engineering,CSE
-9a4de9c5-a6df-4c8d-a29c-40a23cdeeca7,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Artificial Intelligence & Machine Learning,AIML
-a5b1cd46-f3aa-47e6-aca7-86c3c484dc9e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Electronics & Communication Engineering,ECE
-e80b66b0-2887-4198-a982-098e7b2951d1,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Electrical & Electronics Engineering,EEE
-b596e39f-e01e-419f-a9a6-959ec0209866,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Mechanical Engineering,ME
-81b6c9ce-8b87-4bd8-a96a-f864f4820e56,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Civil Engineering,CE
-ca586e0e-3f8b-4f91-a893-0f644ead1c7b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MCA,Master of Computer Applications,MCA
-d34e75d8-d196-4e88-814e-2fd1a8cb2788,e11c8eb4-1e0c-467f-8f98-796a9e24129c,MBA,Master of Business Administration,MBA
+562580de-ce33-4c32-a1f1-f9b1f299f57e,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Computer Science and Engineering,CSE
+62501ea7-acd6-4cb5-aa5b-948210b1a463,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Electronics and Communication Engineering,ECE
+98274336-2b8f-4291-b6f2-116d52f8b79b,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Electrical and Electronics Engineering,EEE
+f0125d70-280d-4718-b08f-82f4f4444280,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Mechanical Engineering,ME
+e83f9cf5-5016-4300-9456-e8c6abc82578,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Civil Engineering,CE
+7905fd24-4167-4ead-bab0-e37675822d13,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Artificial Intelligence and Machine Learning,AIML
+3c04b737-24d3-45a4-9d43-71550a5fef3f,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Data Science,DS
+bf312d40-51bd-437d-a392-20db203d8850,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Information Technology,IT
+9804189b-54b5-4556-84ea-ae7d6562a3f9,e11c8eb4-1e0c-467f-8f98-796a9e24129c,B.Tech,Humanities and Social Sciences,HSS

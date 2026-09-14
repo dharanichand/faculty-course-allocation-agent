@@ -7,7 +7,7 @@ import Course from './models/Course.js';
 import Allocation from './models/Allocation.js';
 import Conflict from './models/Conflict.js';
 import User from './models/User.js';
-import {memory,memoryFaculty,memoryRequests,syntheticRequests} from './data/store.js';
+import {memory,memoryFaculty,memoryRequests} from './data/store.js';
 import authRoutes from './routes/auth.js';import agentRoutes from './routes/agent.js';import allocationRoutes from './routes/allocations.js';import dataRoutes from './routes/data.js';import emailRoutes from './routes/email.js';
 
 // RULE (security): fail fast and loudly at boot rather than silently signing
@@ -45,7 +45,7 @@ async function seedMongo(){
     Faculty.countDocuments(),Course.countDocuments(),Allocation.countDocuments(),Conflict.countDocuments()
   ]);
   if(!facultyCount && memory.faculty.length) await Faculty.insertMany(memory.faculty,{ordered:false});
-  for(const faculty of memoryFaculty) if(faculty.publications?.length) await Faculty.updateOne({facultyId:faculty.facultyId},{$set:{publications:faculty.publications}});
+  for(const faculty of memoryFaculty) await Faculty.updateOne({facultyId:faculty.facultyId},{$set:{publications:faculty.publications,preferences:faculty.preferences,maxWorkload:faculty.maxWorkload}});
   if(process.env.DEMO_MODE==='true'){
    const defaultUsers=[
     {name:'Dr. Ananya Rao',email:'hod@college.edu',password:'hod12345',role:'hod'},
@@ -61,12 +61,8 @@ async function seedMongo(){
    }
   }
   if(!courseCount && memory.courses.length) await Course.insertMany(memory.courses,{ordered:false});
+  for(const course of memory.courses) await Course.updateOne({courseId:course.courseId},{$set:{requiredExpertise:course.requiredExpertise,requiredQualification:course.requiredQualification}});
   if(!allocationCount && memoryRequests.length) await Allocation.insertMany(memoryRequests.map(({_id,...r})=>({...r,_id:undefined})),{ordered:false});
-  for(const request of syntheticRequests) await Allocation.updateOne(
-    {syntheticKey:request.syntheticKey},
-    {$setOnInsert:{facultyId:request.facultyId,courseId:request.courseId,sectionId:request.sectionId,status:'pending',recommendationScore:request.recommendationScore,recommendationReason:request.recommendationReason,syntheticKey:request.syntheticKey,override:false}},
-    {upsert:true}
-  );
   if(!conflictCount && memory.conflicts.length) await Conflict.insertMany(memory.conflicts,{ordered:false});
   console.log(`MongoDB seed check: faculty=${await Faculty.countDocuments()}, courses=${await Course.countDocuments()}, allocations=${await Allocation.countDocuments()}, conflicts=${await Conflict.countDocuments()}`);
 }
