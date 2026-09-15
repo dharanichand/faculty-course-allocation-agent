@@ -5,7 +5,10 @@ import {idParam,bulkIdsBody,bulkRejectBody,rejectBody,overrideBody} from '../val
 import Allocation from '../models/Allocation.js';
 import Faculty from '../models/Faculty.js';
 import AuditLog from '../models/AuditLog.js';
-import {pendingAllocations,decideMemoryAllocation,allFaculty,allCourses,memoryRequests,pendingConflicts,findFaculty,findCourse} from '../data/store.js';
+import {pendingAllocations,decideMemoryAllocation,allFaculty,allCourses,memoryRequests,pendingConflicts,findFaculty,findCourse,applyWorkloadDelta,hoursForCourse} from '../data/store.js';
+import {optimizeSemesterAllocation} from '../services/allocationOptimizer.js';
+import {narrateDraftInBatches} from '../services/aiAllocation.js';
+import crypto from 'crypto';
 import {sendAllocationDecisionEmail,sendReassignmentEmail,sendUnassignmentEmail} from '../services/emailService.js';
 import {calculateRecommendationScore} from '../tools/allocationTools.js';
 import {classifyCourseAllocation} from '../services/aiAllocation.js';
@@ -209,6 +212,7 @@ r.post('/run-ai',auth,role('hod'),async(req,res)=>{
       if(dbReady()){
        await Allocation.findByIdAndUpdate(reqItem._id,{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date(),recommendationScore:winner.score,recommendationReason:ai.summary}});
        await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'AI_AUTO_APPROVE_ALLOCATION',entityType:'allocation',entityId:String(reqItem._id),newValue:{...reqItem,status:'approved'},reason:ai.summary});
+       await applyWorkloadDelta(reqItem.facultyId,hoursForCourse(course));
       }else{
        await decideMemoryAllocation(reqItem._id,'approved',{approvedBy:req.user.id,approvedAt:new Date(),recommendationScore:winner.score,recommendationReason:ai.summary});
       }
@@ -246,6 +250,96 @@ r.post('/run-ai',auth,role('hod'),async(req,res)=>{
  }catch(e){res.status(500).json({message:e.message})}
 });
 
+// ==========================================================================
+// SEMESTER-WIDE OPTIMIZATION (Agent 3 workflow steps 6-8)
+//
+// run-ai above still exists unchanged for reviewing/auto-deciding courses
+// one at a time. This is the whole-semester version: it solves every
+// pending course together as one constrained assignment (see
+// services/allocationOptimizer.js) so workload caps are respected across
+// courses, not just within one, and it produces the gap-analysis output the
+// project spec calls for (courses with no suitable faculty) - which nothing
+// in the original code generated at all.
+//
+// It is a PROPOSAL ONLY: nothing is written to the database until the HOD
+// explicitly applies the draft via /optimize/:jobId/apply, or approves
+// individual rows the normal way. This matches the guardrail already in the
+// spec photo: "the optimiser proposes; a human decides."
+//
+// It runs as a background job (in-memory job map, no new infra/dependency)
+// instead of blocking the HTTP request for the whole run - a full semester
+// can mean dozens of courses and several batched LLM narration calls, and a
+// synchronous multi-second/minute request is exactly the kind of thing that
+// times out or feels broken on a large dataset.
+// ==========================================================================
+const optimizationJobs=new Map();
+
+r.post('/optimize',auth,role('hod'),async(req,res)=>{
+ const jobId=crypto.randomUUID();
+ const {academicYear,semester,department}=req.body||{};
+ optimizationJobs.set(jobId,{status:'running',createdAt:new Date(),scope:{academicYear,semester,department}});
+ res.status(202).json({ok:true,jobId,status:'running'});
+
+ (async()=>{
+  try{
+   const result=await optimizeSemesterAllocation({academicYear,semester,department});
+   const narrated=await narrateDraftInBatches(result);
+   optimizationJobs.set(jobId,{status:'done',createdAt:optimizationJobs.get(jobId)?.createdAt||new Date(),scope:result.scope,result:{...result,...narrated}});
+  }catch(e){
+   optimizationJobs.set(jobId,{status:'error',createdAt:optimizationJobs.get(jobId)?.createdAt||new Date(),error:e.message});
+  }
+ })();
+});
+
+r.get('/optimize/:jobId',auth,role('hod'),(req,res)=>{
+ const job=optimizationJobs.get(req.params.jobId);
+ if(!job)return res.status(404).json({message:'No optimization job found with that id.'});
+ res.json(job);
+});
+
+// Applies some or all of a completed draft: writes the chosen allocations to
+// 'approved', rejects other pending requests for the same course, updates
+// workload, and logs an audit entry per row - i.e. the same effects a normal
+// approve click has, just for many rows from one draft at once. Passing
+// courseIds lets the HOD apply only the rows they're comfortable with and
+// leave the rest for manual review, which is the "low friction override"
+// guardrail from the spec: nothing here is all-or-nothing.
+r.post('/optimize/:jobId/apply',auth,role('hod'),async(req,res)=>{
+ try{
+  const job=optimizationJobs.get(req.params.jobId);
+  if(!job||job.status!=='done')return res.status(404).json({message:'No completed optimization job found with that id.'});
+  const courseIds=Array.isArray(req.body?.courseIds)&&req.body.courseIds.length?new Set(req.body.courseIds):null;
+  const rows=job.result.draftAllocations.filter(a=>!courseIds||courseIds.has(a.courseId));
+  const applied=[];
+  for(const row of rows){
+   if(!row.allocationId)continue;
+   if(dbReady()){
+    const doc=await Allocation.findById(row.allocationId);
+    if(!doc||!['pending','recommended'].includes(doc.status))continue;
+    await Allocation.updateMany({courseId:row.courseId,status:{$in:['pending','recommended']}},{$set:{status:'rejected',overrideReason:'Semester optimization selected another candidate for this course.'}});
+    await Allocation.findByIdAndUpdate(row.allocationId,{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date(),recommendationScore:row.score,recommendationReason:row.justification}});
+    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'OPTIMIZER_APPLY_ALLOCATION',entityType:'allocation',entityId:String(row.allocationId),newValue:{...row,status:'approved'},reason:row.justification});
+    await applyWorkloadDelta(row.facultyId,hoursForCourse(await findCourse(row.courseId)));
+    notifyDecision({...doc.toObject(),facultyId:row.facultyId,courseId:row.courseId},'approved',row.justification);
+    applied.push(row.courseId);
+   }
+  }
+  const remaining=await pendingAllocations();
+  res.json({ok:true,applied,remaining});
+ }catch(e){res.status(400).json({message:e.message})}
+});
+
+// Lightweight read-only version of the gap-analysis half of /optimize, for
+// dashboards/reports that just want "what can't be covered right now"
+// without needing to apply anything.
+r.get('/gap-analysis',auth,role('hod','dean'),async(req,res)=>{
+ try{
+  const {academicYear,semester,department}=req.query||{};
+  const result=await optimizeSemesterAllocation({academicYear,semester,department});
+  res.json({generatedAt:result.generatedAt,scope:result.scope,coursesConsidered:result.coursesConsidered,coursesUnallocated:result.coursesUnallocated,gapAnalysis:result.gapAnalysis});
+ }catch(e){res.status(500).json({message:e.message})}
+});
+
 r.post('/bulk-approve',auth,role('hod'),validate({body:bulkIdsBody}),async(req,res)=>{
  try{
   const ids=req.body.ids;
@@ -253,8 +347,12 @@ r.post('/bulk-approve',auth,role('hod'),validate({body:bulkIdsBody}),async(req,r
    const docs=await Allocation.find({_id:{$in:ids},status:{$in:['pending','recommended']}});
    if(!docs.length)return res.status(404).json({message:'No selected pending allocations found.'});
    const result=await Allocation.updateMany({_id:{$in:docs.map(x=>x._id)},status:{$in:['pending','recommended']}},{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date()}});
+   const courseHoursCache=new Map();
    for(const d of docs){
     await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(d._id),newValue:{...d.toObject(),status:'approved',approvedBy:req.user.id}});
+    // Keep Faculty.currentWorkload real so future scoring/hard-violation checks see it (see applyWorkloadDelta comment in store.js).
+    if(!courseHoursCache.has(d.courseId))courseHoursCache.set(d.courseId,hoursForCourse(await findCourse(d.courseId)));
+    await applyWorkloadDelta(d.facultyId,courseHoursCache.get(d.courseId));
    }
    Promise.allSettled(docs.map(d=>notifyDecision(d,'approved')));
    const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
@@ -316,6 +414,7 @@ r.post('/:id/approve',auth,role('hod'),validate({params:idParam}),async(req,res)
     await Allocation.updateMany({courseId:item.courseId,sectionId:item.sectionId,status:{$in:['pending','recommended']},_id:{$ne:item._id}},{$set:{status:'rejected',overrideReason:'Another candidate was selected by the HOD.'}});
    item=await Allocation.findById(req.params.id).lean();
    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(item._id),newValue:item});
+   await applyWorkloadDelta(item.facultyId,hoursForCourse(await findCourse(item.courseId)));
    notifyDecision(item,'approved');
    const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
    return res.json({ok:true,allocation:item,remaining});
@@ -372,9 +471,15 @@ r.post('/:id/override',auth,role('hod'),validate({params:idParam,body:overrideBo
    if(!item)return res.status(404).json({message:'Allocation not found'});
    const reason=req.body.reason||'';
    const previousFacultyId=item.facultyId;
+   const wasApproved=item.status==='approved';
    const courseId=item.courseId,sectionId=item.sectionId;
    item.status='approved';item.override=true;item.overrideReason=reason;item.facultyId=req.body.facultyId;item.approvedBy=req.user.id;item.approvedAt=new Date();await item.save();
    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'OVERRIDE_ALLOCATION',entityType:'allocation',entityId:String(item._id),newValue:item.toObject(),reason});
+   // Move the workload hours off the previous faculty (only if they'd actually
+   // been credited with this course already) and onto the new one.
+   const overrideHours=hoursForCourse(await findCourse(courseId));
+   if(wasApproved && previousFacultyId && previousFacultyId!==req.body.facultyId) await applyWorkloadDelta(previousFacultyId,-overrideHours);
+   if(previousFacultyId!==req.body.facultyId) await applyWorkloadDelta(req.body.facultyId,overrideHours);
    notifyReassignment(courseId,sectionId,previousFacultyId,req.body.facultyId,reason);
    const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
    return res.json({ok:true,allocation:item,remaining});

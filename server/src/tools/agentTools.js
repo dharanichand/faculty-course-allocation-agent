@@ -12,6 +12,10 @@ import {
   calculateRecommendationScore
 } from './allocationTools.js';
 
+import {
+  optimizeSemesterAllocation
+} from '../services/allocationOptimizer.js';
+
 
 // ======================================================
 // GROQ / OPENAI-COMPATIBLE TOOL DEFINITIONS
@@ -278,6 +282,58 @@ export const toolDefinitions = [
     type: 'function',
 
     function: {
+      name: 'get_gap_analysis',
+
+      description:
+        'Run the semester-wide allocation optimizer read-only and return only the courses that currently have no viable faculty (no requester, or every requester fails a hard constraint or is out of workload capacity), with reasons. Does not modify the database.',
+
+      parameters: {
+        type: 'object',
+
+        properties: {
+          academicYear: { type: 'string', description: 'Optional academic year filter, e.g. 2026-27.' },
+          semester: { type: 'string', description: 'Optional semester filter, e.g. I or II.' },
+          department: { type: 'string', description: 'Optional department filter, e.g. CSE.' }
+        },
+
+        required: [],
+
+        additionalProperties: false
+      }
+    }
+  },
+
+
+  {
+    type: 'function',
+
+    function: {
+      name: 'run_semester_optimization',
+
+      description:
+        'Run the semester-wide allocation optimizer: solves every pending course together (not one at a time) so faculty workload caps are respected across courses, and returns a draft allocation plus a gap analysis of unallocated courses. This is a proposal only and never modifies the database - the HOD must apply it separately.',
+
+      parameters: {
+        type: 'object',
+
+        properties: {
+          academicYear: { type: 'string', description: 'Optional academic year filter, e.g. 2026-27.' },
+          semester: { type: 'string', description: 'Optional semester filter, e.g. I or II.' },
+          department: { type: 'string', description: 'Optional department filter, e.g. CSE.' }
+        },
+
+        required: [],
+
+        additionalProperties: false
+      }
+    }
+  },
+
+
+  {
+    type: 'function',
+
+    function: {
       name: 'what_if_assignment',
 
       description:
@@ -460,6 +516,35 @@ export const toolFns = {
   list_pending_conflicts: async () => {
 
     return pendingConflicts();
+
+  },
+
+
+  // ----------------------------------------------------
+  // GAP ANALYSIS (read-only slice of the semester optimizer)
+  // ----------------------------------------------------
+
+  get_gap_analysis: async ({ academicYear, semester, department } = {}) => {
+
+    const result = await optimizeSemesterAllocation({ academicYear, semester, department });
+
+    return {
+      scope: result.scope,
+      coursesConsidered: result.coursesConsidered,
+      coursesUnallocated: result.coursesUnallocated,
+      gapAnalysis: result.gapAnalysis
+    };
+
+  },
+
+
+  // ----------------------------------------------------
+  // SEMESTER-WIDE OPTIMIZATION (proposal only, never writes to the DB)
+  // ----------------------------------------------------
+
+  run_semester_optimization: async ({ academicYear, semester, department } = {}) => {
+
+    return optimizeSemesterAllocation({ academicYear, semester, department });
 
   },
 

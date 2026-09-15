@@ -19,7 +19,10 @@ import {
 // ======================================================
 
 const SYSTEM = `
-You are the Faculty Course Allocation Agent for a university CSE department.
+You are the Faculty Course Allocation Agent for a university academic department.
+The specific department(s) involved come from the verified data returned by your tools
+(e.g. a course's department field, or a department filter argument) - never assume it is
+any one fixed department such as CSE unless the verified data says so.
 
 You are a decision-support agent, NOT the final allocator.
 The HOD remains the final authority.
@@ -41,7 +44,11 @@ RULES:
 6. If multiple faculty request the same course,
    explicitly state that HOD review is required.
 
-7. What-if simulations must never modify the database.
+7. What-if simulations must never modify the database. The same applies to
+   run_semester_optimization: it only proposes a draft and a gap analysis -
+   it never approves, rejects, or writes anything, and you must never say it
+   has "finalized" or "assigned" anything. Applying a draft is a separate,
+   explicit HOD action outside this chat tool.
 
 8. Clearly separate:
    - Verified facts
@@ -138,6 +145,26 @@ function getClient() {
 async function localAgentAnswer(message) {
   const q = String(message || '').trim();
   const lower = q.toLowerCase();
+
+  if (lower.includes('gap') || lower.includes('no suitable') || lower.includes('unallocated') || lower.includes('no faculty')) {
+    const data = await toolFns.get_gap_analysis({});
+    return {
+      answer: data.coursesUnallocated
+        ? `Gap analysis: ${data.coursesUnallocated} of ${data.coursesConsidered} pending course(s) currently have no viable faculty. ${data.gapAnalysis.slice(0,5).map(g=>`${g.courseId} (${g.courseName}): ${g.reason}`).join(' ')}`
+        : `Gap analysis: all ${data.coursesConsidered} pending course(s) have at least one viable faculty candidate right now.`,
+      requiresHod: data.coursesUnallocated > 0,
+      toolTrace: [{name:'get_gap_analysis',args:'{}'}]
+    };
+  }
+
+  if (lower.includes('optimi') && (lower.includes('semester') || lower.includes('whole') || lower.includes('all course') || lower.includes('run allocation'))) {
+    const data = await toolFns.run_semester_optimization({});
+    return {
+      answer: `Semester optimization proposal only (nothing written to the database): ${data.coursesAllocated} of ${data.coursesConsidered} course(s) matched to a faculty member, ${data.coursesUnallocated} left unallocated. HOD review and explicit apply is required before anything is finalized.`,
+      requiresHod: true,
+      toolTrace: [{name:'run_semester_optimization',args:'{}'}]
+    };
+  }
 
   if (lower.includes('conflict') || lower.includes('multiple request')) {
     const data = await toolFns.list_pending_conflicts({});
