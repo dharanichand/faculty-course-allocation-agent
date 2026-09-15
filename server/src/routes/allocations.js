@@ -3,6 +3,7 @@ import {auth,role} from '../middleware/auth.js';
 import {validate} from '../middleware/validate.js';
 import {idParam,bulkIdsBody,bulkRejectBody,rejectBody,overrideBody} from '../validation/schemas.js';
 import Allocation from '../models/Allocation.js';
+import Faculty from '../models/Faculty.js';
 import AuditLog from '../models/AuditLog.js';
 import {pendingAllocations,decideMemoryAllocation,allFaculty,allCourses,memoryRequests,pendingConflicts,findFaculty,findCourse} from '../data/store.js';
 import {sendAllocationDecisionEmail,sendReassignmentEmail,sendUnassignmentEmail} from '../services/emailService.js';
@@ -12,6 +13,47 @@ import mongoose from 'mongoose';
 
 const r=Router();
 const dbReady=()=>mongoose.connection.readyState===1;
+
+async function resolveFacultyId(user){
+  if(!user || user.role!=='faculty') return String(user?.facultyId||'');
+  // Prefer the normalized Faculty collection. A stale JWT may still carry an
+  // old/missing facultyId, so also resolve by email/name.
+  let profile=null;
+  if(user.facultyId){
+    profile=await findFaculty(user.facultyId);
+  }
+  if(!profile && user.email){
+    profile=await findFaculty(user.email);
+    if(!profile && dbReady()) profile=await Faculty.findOne({email:user.email}).lean();
+  }
+  if(!profile && user.name && dbReady()){
+    const escaped=String(user.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    profile=await Faculty.findOne({name:new RegExp(`^${escaped}$`,'i')}).lean();
+  }
+  // Last-resort identity bridge for the large imported dataset. This maps
+  // college-email/person identities to the normalized Faculty UUID used by
+  // Allocation records.
+  if(!profile && dbReady()){
+    const rawGmail=mongoose.connection.db.collection('dataset_faculty_gmail_dataset');
+    const rawPerson=mongoose.connection.db.collection('dataset_person');
+    const rawFaculty=mongoose.connection.db.collection('dataset_faculty');
+    let raw=null;
+    if(user.email) raw=await rawGmail.findOne({email:user.email});
+    if(!raw && user.email) raw=await rawPerson.findOne({email:user.email});
+    if(!raw && user.name) raw=await rawGmail.findOne({faculty_name:user.name});
+    if(!raw && user.name) raw=await rawPerson.findOne({full_name:user.name});
+    if(raw){
+      const rawFacultyId=raw.faculty_id || raw.facultyId;
+      if(rawFacultyId) profile=await Faculty.findOne({facultyId:String(rawFacultyId)}).lean();
+      if(!profile && raw.employee_no) profile=await Faculty.findOne({employeeNo:String(raw.employee_no)}).lean();
+      if(!profile && raw.person_id){
+        const fr=await rawFaculty.findOne({person_id:raw.person_id});
+        if(fr?.faculty_id) profile=await Faculty.findOne({facultyId:String(fr.faculty_id)}).lean();
+      }
+    }
+  }
+  return profile?.facultyId ? String(profile.facultyId) : String(user.facultyId||'');
+}
 
 // Best-effort email notifications: allocation decisions must never fail (or be
 // slowed down) because Brevo is unreachable or unconfigured, so every call is
@@ -43,7 +85,7 @@ r.get('/',auth,async(req,res)=>{try{res.json(await pendingAllocations())}catch(e
 
 r.get('/my',auth,async(req,res)=>{
  try{
-  const target=req.user.role==='hod'||req.user.role==='dean'?String(req.query.facultyId||''):String(req.user.facultyId||'');
+  const target=req.user.role==='hod'||req.user.role==='dean'?String(req.query.facultyId||''):await resolveFacultyId(req.user);
   if(!target)return res.status(400).json({message:'A faculty account is required to view proposed allocations'});
   const courseList=await allCourses(); const courses=new Map(courseList.map(c=>[c.courseId,c]));
   const rows=dbReady()?await Allocation.find({facultyId:target}).sort({createdAt:-1}).lean():memoryRequests.filter(x=>x.facultyId===target);
@@ -57,9 +99,11 @@ r.get('/my',auth,async(req,res)=>{
 
 r.get('/notifications',auth,async(req,res)=>{
  try{
-  if(req.user.role!=='faculty'||!req.user.facultyId)return res.status(403).json({message:'Faculty access is required'});
+  if(req.user.role!=='faculty')return res.status(403).json({message:'Faculty access is required'});
+  const facultyId=await resolveFacultyId(req.user);
+  if(!facultyId)return res.status(403).json({message:'Faculty account is not linked to a Faculty profile'});
   const courses=new Map((await allCourses()).map(c=>[c.courseId,c]));
-  const rows=dbReady()?await Allocation.find({facultyId:req.user.facultyId}).sort({updatedAt:-1,createdAt:-1}).limit(30).lean():memoryRequests.filter(x=>x.facultyId===req.user.facultyId).slice(-30).reverse();
+  const rows=dbReady()?await Allocation.find({facultyId}).sort({updatedAt:-1,createdAt:-1}).limit(30).lean():memoryRequests.filter(x=>x.facultyId===facultyId).slice(-30).reverse();
   res.json(rows.map(item=>({
    id:String(item._id),
    type:item.status==='approved'?'success':item.status==='rejected'?'warning':'info',

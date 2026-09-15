@@ -29,57 +29,67 @@ r.post('/login', validate({body: loginBody}), async (req, res) => {
       return res.status(401).json({message: 'Invalid credentials'});
     }
 
-    // Faculty accounts must be linked to the real Faculty collection record.
-    // Resolve stale/missing IDs from the normalized Faculty collection first,
-    // then fall back to the imported dataset and create the application
-    // profile when necessary. This prevents the Faculty Portal from showing
-    // "Faculty not found" for valid faculty accounts.
+    // The official HOD identity is fixed across the whole application.
+    if (u.role === 'hod' && u.name !== 'Dr.Phani Kumar') {
+      u.name = 'Dr.Phani Kumar';
+      await User.updateOne({_id:u._id}, {$set:{name:'Dr.Phani Kumar'}});
+    }
+
     let resolvedFacultyId = u.facultyId || null;
     if (u.role === 'faculty') {
-      let profile = resolvedFacultyId
-        ? await Faculty.findOne({$or:[{facultyId:resolvedFacultyId},{employeeNo:resolvedFacultyId}]})
-        : null;
-      if (!profile) profile = await Faculty.findOne({email:u.email}).sort({createdAt:1});
-      if (!profile && u.name) profile = await Faculty.findOne({name:new RegExp(`^${String(u.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')}).sort({createdAt:1});
+      let profile = null;
+      // Email/name are the safest identity keys. A stored facultyId may be stale
+      // after a dataset re-import, so do not trust it ahead of the actual account identity.
+      if (u.email) profile = await Faculty.findOne({email:u.email}).lean();
+      if (!profile && u.name) {
+        const escaped=String(u.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        profile = await Faculty.findOne({name:new RegExp(`^${escaped}$`,'i')}).sort({createdAt:1}).lean();
+      }
 
-      // If the app collection has not yet been populated, use the imported
-      // faculty-gmail dataset as the authoritative identity mapping.
+      if (!profile && resolvedFacultyId) {
+        profile = await Faculty.findOne({$or:[{facultyId:resolvedFacultyId},{employeeNo:resolvedFacultyId}]}).lean();
+      }
+
       if (!profile && mongoose.connection.readyState === 1) {
-        const raw = mongoose.connection.db.collection('dataset_faculty_gmail_dataset');
-        const rawProfile = await raw.findOne({$or:[
-          {email:u.email},
-          {employee_no:resolvedFacultyId},
-          {faculty_name:u.name}
-        ]});
-        if (rawProfile) {
-          const appFacultyId = String(rawProfile.employee_no || rawProfile.faculty_id || '').trim();
-          if (appFacultyId) {
-            profile = await Faculty.findOne({$or:[{facultyId:appFacultyId},{employeeNo:appFacultyId}]});
-            if (!profile) {
-              profile = await Faculty.create({
-                facultyId:appFacultyId,
-                name:String(rawProfile.faculty_name || u.name || '').trim(),
-                email:String(rawProfile.email || u.email || '').trim(),
-                department:'CSE',
-                designation:'Faculty',
-                qualifications:[],specializations:[],expertise:[],
-                preferences:[],status:'active'
-              });
-            }
+        const db=mongoose.connection.db;
+        const rawGmail=db.collection('dataset_faculty_gmail_dataset');
+        const rawPerson=db.collection('dataset_person');
+        const rawFaculty=db.collection('dataset_faculty');
+        let raw=null;
+        if(u.email) raw=await rawGmail.findOne({email:u.email});
+        if(!raw && u.email) raw=await rawPerson.findOne({email:u.email});
+        if(!raw && u.name) raw=await rawGmail.findOne({faculty_name:u.name});
+        if(!raw && u.name) raw=await rawPerson.findOne({full_name:u.name});
+        if(raw){
+          let rawFacultyId=raw.faculty_id || raw.facultyId || null;
+          if(!rawFacultyId && raw.person_id){
+            const fr=await rawFaculty.findOne({person_id:raw.person_id});
+            rawFacultyId=fr?.faculty_id || null;
+          }
+          if(rawFacultyId) profile=await Faculty.findOne({facultyId:String(rawFacultyId)}).lean();
+          if(!profile && raw.employee_no) profile=await Faculty.findOne({employeeNo:String(raw.employee_no)}).lean();
+          if(!profile && rawFacultyId){
+            profile=await Faculty.create({
+              facultyId:String(rawFacultyId),name:String(raw.faculty_name||raw.full_name||u.name||'Faculty'),
+              email:String(raw.email||u.email||''),department:'CSE',designation:'Faculty',
+              qualifications:[],specializations:[],expertise:[],preferences:[],status:'active'
+            });
           }
         }
       }
-
       if (profile) {
-        resolvedFacultyId = profile.facultyId;
+        resolvedFacultyId = String(profile.facultyId);
         if (u.facultyId !== resolvedFacultyId) await User.updateOne({_id:u._id}, {$set:{facultyId:resolvedFacultyId}});
       }
     }
 
-    const token = jwt.sign({id: u._id, role: u.role, facultyId: resolvedFacultyId, name: u.name, email: u.email}, getJwtSecret(), {expiresIn: '8h'});
-    res.json({token, user: {name: u.name, email: u.email, role: u.role, facultyId: resolvedFacultyId}});
+    const token = jwt.sign(
+      {id:u._id,role:u.role,facultyId:resolvedFacultyId,name:u.name,email:u.email},
+      getJwtSecret(),{expiresIn:'8h'}
+    );
+    res.json({token,user:{name:u.name,email:u.email,role:u.role,facultyId:resolvedFacultyId}});
   } catch (e) {
-    res.status(500).json({message: e.message});
+    res.status(500).json({message:e.message});
   }
 });
 

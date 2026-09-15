@@ -1,16 +1,16 @@
-FCAA Faculty Portal Fix
+FCAA Faculty Portal data-link fix
 
-Replace these files in your project:
+Replace only:
   server/src/routes/auth.js
-  client/src/pages/Preferences.jsx
+  server/src/routes/allocations.js
 
 What this fixes:
-- Faculty login now resolves a missing/stale facultyId from the Faculty collection.
-- If the application Faculty collection is empty, login can rebuild the faculty profile from dataset_faculty_gmail_dataset.
-- The user record is updated with the resolved facultyId.
-- Preferences matches faculty by ID, email, or name and then loads the correct profile.
+- Resolves a Faculty account by email/name even when the JWT contains a stale facultyId.
+- Bridges accounts to the imported dataset_faculty_gmail_dataset / dataset_person / dataset_faculty records.
+- Uses the resolved Faculty ID for /allocations/my and /allocations/notifications, so existing allocation records are shown on the Faculty Dashboard.
+- Normal login keeps the official HOD name as Dr.Phani Kumar.
 
-After deploying the backend and frontend:
+After deployment:
 1. Sign out of the Faculty account.
-2. Sign in again.
-3. Open Preferences.
+2. Sign in again so a fresh JWT is issued.
+3. Refresh the Faculty Dashboard.
