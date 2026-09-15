@@ -92,9 +92,14 @@ r.get('/faculty/:id/preferences', auth, async (req,res) => {
 // currently has saved as their preferences:
 //  - a preferred course with no existing request gets a new pending one.
 //  - a course removed from the preference list has its still-undecided
-//    (pending/recommended) request withdrawn; anything the HOD already
-//    approved/rejected is left alone - a preference edit must never quietly
-//    reverse a decision that was already made.
+//    (pending/recommended) request DELETED outright - it was withdrawn by
+//    the faculty member before the HOD ever acted on it, so it must vanish
+//    from "My requests", the HOD Requests page, and the Review queue, not
+//    linger there mislabeled as an HOD rejection (that's a different, real
+//    decision and must never be implied for something the HOD never saw).
+//  - a course the HOD has already approved or rejected is left completely
+//    untouched - editing preferences must never silently reverse or erase a
+//    decision that was already made.
 async function syncAllocationRequestsFromPreferences(facultyId, preferences) {
   const courseIds = preferences.map(p => p.courseId);
   const existing = await Allocation.find({ facultyId, courseId: { $in: courseIds } }).lean();
@@ -111,9 +116,8 @@ async function syncAllocationRequestsFromPreferences(facultyId, preferences) {
           recommendationReason: 'Submitted by faculty as a ranked course preference.'
         })), { ordered: false })
       : Promise.resolve(),
-    Allocation.updateMany(
-      { facultyId, status: { $in: ['pending', 'recommended'] }, courseId: { $nin: courseIds } },
-      { $set: { status: 'rejected', overrideReason: 'Withdrawn: no longer listed in faculty preferences.' } }
+    Allocation.deleteMany(
+      { facultyId, status: { $in: ['pending', 'recommended'] }, courseId: { $nin: courseIds } }
     )
   ]);
 }
@@ -133,10 +137,11 @@ r.put('/faculty/:id/preferences', auth, async (req,res) => {
     if (!faculty) return res.status(404).json({message:'Faculty not found'});
     faculty.preferences = preferences;
     const courseIds = preferences.map(p => p.courseId);
-    for (const item of memoryRequests) {
+    for (let i = memoryRequests.length - 1; i >= 0; i--) {
+      const item = memoryRequests[i];
       if (item.facultyId !== faculty.facultyId) continue;
       if (['pending','recommended'].includes(item.status) && !courseIds.includes(item.courseId)) {
-        Object.assign(item, { status: 'rejected', overrideReason: 'Withdrawn: no longer listed in faculty preferences.' });
+        memoryRequests.splice(i, 1);
       }
     }
     for (const p of preferences) {
