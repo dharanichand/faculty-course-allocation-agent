@@ -1,7 +1,8 @@
 import React,{Component,useEffect} from 'react';
 import {NavLink,useLocation,useNavigate} from 'react-router-dom';
 import {Routes,Route} from 'react-router-dom';
-import {LayoutDashboard,BookOpen,Users,GitBranch,BrainCircuit,ClipboardCheck,ShieldCheck,FileText,Settings,Bot,LogOut,SlidersHorizontal,UserCheck} from 'lucide-react';
+import {apiRequest} from './api';
+import {LayoutDashboard,BookOpen,Users,GitBranch,BrainCircuit,ClipboardCheck,ShieldCheck,FileText,Settings,Bot,LogOut,SlidersHorizontal,UserCheck,Bell} from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import FacultyDashboard from './pages/FacultyDashboard';
 import Requests from './pages/Requests';
@@ -15,6 +16,7 @@ import Reports from './pages/Reports';
 import SettingsPage from './pages/Settings';
 import Preferences from './pages/Preferences';
 import MyAllocation from './pages/MyAllocation';
+import Notifications from './pages/Notifications';
 
 class PageErrorBoundary extends Component {
  state={error:null};
@@ -46,6 +48,17 @@ function App(){
  const user=(()=>{try{return JSON.parse(sessionStorage.getItem('allocation_user')||'null')}catch{return null}})();
  const displayName=user?.role==='hod'?'Dr.Phani Kumar':(user?.name||'User');
  const displayRole=user?.role==='hod'?'Head of Department':user?.role;
+ const [notificationCount,setNotificationCount]=React.useState(0);
+ useEffect(()=>{
+  if(user?.role!=='faculty')return;
+  let alive=true;
+  const refresh=()=>apiRequest({method:'GET',url:'/allocations/notifications'}).then(r=>{
+   if(!alive)return;
+   try{const read=new Set(JSON.parse(localStorage.getItem('fcaa_read_notifications')||'[]'));setNotificationCount((r.data||[]).filter(n=>!read.has(n.id)).length)}catch{setNotificationCount((r.data||[]).length)}
+  }).catch(()=>{});
+  refresh(); window.addEventListener('fcaa-notifications-read',refresh); const timer=setInterval(refresh,30000);
+  return()=>{alive=false;clearInterval(timer);window.removeEventListener('fcaa-notifications-read',refresh)};
+ },[user?.role,user?.facultyId]);
  const visibleNav=user?.role==='hod'
   ? nav.filter(item=>!['/preferences','/my-allocation'].includes(item.to))
   : user?.role==='faculty'
@@ -73,6 +86,7 @@ function App(){
     <div className="flex items-center gap-2 shrink-0">
      <div className="text-right leading-tight"><div className="text-[12px] font-semibold text-slate-800">{displayName}</div><div className="hidden sm:block text-[10px] text-slate-400">{displayRole}</div></div>
      <div className="hidden sm:flex w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white items-center justify-center font-bold text-xs">{displayName.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
+     {user?.role==='faculty'&&<button onClick={()=>navigate('/notifications')} title="Notifications" aria-label="Notifications" className="relative p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600"><Bell size={17}/><span className={`${notificationCount>0?"flex":"hidden"} absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold items-center justify-center border-2 border-white`}>{notificationCount>99?"99+":notificationCount}</span></button>}
      <button onClick={()=>navigate('/settings')} title="Settings" className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600"><Settings size={17}/></button>
      <button onClick={logout} title="Sign out" className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-600"><LogOut size={17}/></button>
     </div>
@@ -85,7 +99,7 @@ function App(){
   <div className="h-screen overflow-hidden" style={{paddingTop:HEADER_H}}>
   {user?.role!=='faculty'&&loc.pathname!=='/agent'&&loc.pathname!=='/agent/chat'&&<button type="button" onClick={()=>navigate('/agent')} title="Ask the AI Allocation Agent" className={`fixed z-40 right-6 flex items-center gap-2 pl-3 pr-4 py-3 rounded-full btn-primary ${loc.pathname==='/review'?'bottom-24':'bottom-6'}`}><Bot size={19}/><span className="text-sm font-semibold hidden sm:inline">Ask AI Agent</span></button>}
   <main className="h-[calc(100vh-var(--app-header-height))] overflow-y-auto overscroll-contain p-4 sm:p-7 max-w-[1600px] mx-auto"><PageErrorBoundary><Routes><Route path="/" element={user?.role==='faculty'?<FacultyDashboard/>:<Dashboard/>}/><Route path="/dashboard" element={user?.role==='faculty'?<FacultyDashboard/>:<Dashboard/>}/><Route path="/requests" element={<Requests/>}/><Route path="/faculty-requests" element={<Requests/>}/>
-            <Route path="/faculty" element={user?.role==='faculty'?<FacultyProfile/>:<Faculty/>}/><Route path="/courses" element={<Courses/>}/><Route path="/courses-sections" element={<Courses/>}/><Route path="/conflicts" element={<Conflicts/>}/><Route path="/review" element={<AllocationReview/>}/><Route path="/hod-review" element={<AllocationReview/>}/><Route path="/agent" element={<AgentChat/>}/><Route path="/agent/chat" element={<AgentChat/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/preferences" element={<Preferences/>}/><Route path="/my-allocation" element={<MyAllocation/>}/></Routes></PageErrorBoundary></main>
+            <Route path="/faculty" element={user?.role==='faculty'?<FacultyProfile/>:<Faculty/>}/><Route path="/courses" element={<Courses/>}/><Route path="/courses-sections" element={<Courses/>}/><Route path="/conflicts" element={<Conflicts/>}/><Route path="/review" element={<AllocationReview/>}/><Route path="/hod-review" element={<AllocationReview/>}/><Route path="/agent" element={<AgentChat/>}/><Route path="/agent/chat" element={<AgentChat/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/preferences" element={<Preferences/>}/><Route path="/my-allocation" element={<MyAllocation/>}/><Route path="/notifications" element={<Notifications/>}/></Routes></PageErrorBoundary></main>
   </div>
  </div>
 }
