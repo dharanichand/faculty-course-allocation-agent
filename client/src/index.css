@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root{
+  --app-header-height:168px;
   --bg: #eef4fc;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #0f172a;
@@ -131,3 +132,7 @@ button:disabled,[role="button"][aria-disabled="true"]{cursor:not-allowed}
 .tilt-3d{position:relative;transform-style:preserve-3d;will-change:transform;transition:transform .12s ease-out}
 .tilt-3d-inner{transform-style:preserve-3d}
 .tilt-glare{position:absolute;inset:0;border-radius:inherit;pointer-events:none;transition:opacity .25s ease;mix-blend-mode:overlay}
+
+@media (min-width: 640px){
+  :root{--app-header-height:112px}
+}

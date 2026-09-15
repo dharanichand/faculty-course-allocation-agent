@@ -46,11 +46,11 @@ r.post('/demo', (req, res, next) => {
   next();
 }, async (req, res) => {
   const token = jwt.sign(
-    {id: 'demo-hod', role: 'hod', facultyId: null, name: 'Dr. Ananya Rao'},
+    {id: 'demo-hod', role: 'hod', facultyId: null, name: 'Dr.Phani Kumar'},
     getJwtSecret(),
     {expiresIn: '8h'}
   );
-  res.json({token, user: {name: 'Dr. Ananya Rao', email: 'hod@demo.local', role: 'hod'}});
+  res.json({token, user: {name: 'Dr.Phani Kumar', email: 'hod@demo.local', role: 'hod'}});
 });
 
 export default r;

@@ -45,8 +45,16 @@ if(!mongoUri || mongoUri.includes('YOUR_USERNAME') || mongoUri.includes('YOUR_PA
 }
 
 mongoose.connect(mongoUri,{serverSelectionTimeoutMS:Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS)||10000})
-  .then(()=>{
+  .then(async()=>{
+    // Keep the HOD identity in MongoDB synchronized with the application's
+    // official HOD name. This updates existing HOD accounts as well as the
+    // account returned by normal login.
+    const hodUpdate = await User.updateMany(
+      { role: 'hod' },
+      { $set: { name: 'Dr.Phani Kumar' } }
+    );
     console.log(`MongoDB connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
+    console.log(`HOD name synchronized: ${hodUpdate.modifiedCount ?? 0} account(s) updated`);
     start();
   })
   .catch(e=>{

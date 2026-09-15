@@ -43,7 +43,7 @@ export default function AgentChat() {
   const [messages, setMessages] = useState([
     {
       role: 'ai',
-      text: 'Hi, I\u2019m Buji, your Faculty Course Allocation assistant. Ask me about faculty, courses, requests, workload, conflicts, recommendations, or what-if assignments.',
+      text: 'Hi, I\u2019m FCAA, your Faculty Course Allocation assistant. Ask me about faculty, courses, requests, workload, conflicts, recommendations, or what-if assignments.',
       time: 'now',
     },
   ]);
@@ -158,7 +158,7 @@ export default function AgentChat() {
           {/* Hero, styled after the reference assistant landing panel */}
           <div className="px-6 py-7 text-center bg-gradient-to-b from-blue-50 to-white border-b border-slate-100">
             <RobotAvatar />
-            <div className="font-display font-semibold text-slate-900 mt-2">Faculty Course Allocation Agent</div>
+            <div className="font-display font-semibold text-slate-900 mt-2">FCAA</div>
             <div className="text-xs text-slate-500 mt-1">Ask me about faculty, courses, requests, workload &amp; conflicts</div>
           </div>
 
@@ -167,7 +167,7 @@ export default function AgentChat() {
               <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : ''}`}>
                 <div className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm ${m.role === 'user' ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white' : 'bg-white border border-sky-200 text-slate-700'}`}>
                   <div className={`flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-wider mb-1 ${m.role === 'user' ? 'text-blue-100' : 'text-blue-600'}`}>
-                    <span className="flex items-center gap-1.5">{m.role === 'ai' && <Sparkles size={12} />}{m.role === 'user' ? 'You' : 'Assistant'}</span>
+                    <span className="flex items-center gap-1.5">{m.role === 'ai' && <Sparkles size={12} />}{m.role === 'user' ? 'You' : 'FCAA'}</span>
                     {m.time && <span className={`font-medium normal-case ${m.role === 'user' ? 'text-blue-100/80' : 'text-slate-400'}`}>{m.time}</span>}
                   </div>
                   <div className="whitespace-pre-wrap leading-6">{m.text}</div>
