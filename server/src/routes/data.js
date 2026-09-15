@@ -6,7 +6,7 @@ import Course from '../models/Course.js';
 import Conflict from '../models/Conflict.js';
 import Allocation from '../models/Allocation.js';
 import AuditLog from '../models/AuditLog.js';
-import { memory, memoryFaculty, memoryCourses, memoryRequests, getAllocationConfig, saveAllocationConfig, findFaculty } from '../data/store.js';
+import { memory, memoryFaculty, memoryCourses, memoryRequests, getAllocationConfig, saveAllocationConfig, findFaculty, findCourse, applyWorkloadDelta, hoursForCourse } from '../data/store.js';
 
 const r = Router();
 
@@ -330,6 +330,51 @@ r.post('/requests', auth, async (req,res) => {
     const item=await Allocation.create({facultyId:b.facultyId,courseId:b.courseId,sectionId:b.sectionId||'',status:'pending',recommendationScore:null});
     res.status(201).json(item);
   }catch(e){res.status(400).json({message:e.message});}
+});
+
+// A hard delete, not a status change. "Reject" (routes/allocations.js) is a
+// reviewed decision and intentionally stays in the system as a record - this
+// is for actually removing a request (e.g. one created by mistake, or a
+// faculty member withdrawing before anyone has reviewed it) so it disappears
+// everywhere that reads the Allocation collection: this list, the HOD Review
+// queue, Reports/dashboard counts, /export, and chat-agent tools - instead of
+// lingering forever with a "rejected" badge.
+r.delete('/requests/:id', auth, async (req,res) => {
+  try {
+    const Allocation = (await import('../models/Allocation.js')).default;
+    if (!dbReady()) {
+      const idx = memoryRequests.findIndex(x => x._id === req.params.id);
+      if (idx === -1) return res.status(404).json({message:'Request not found'});
+      memoryRequests.splice(idx, 1);
+      return res.json({ok:true});
+    }
+    const item = await Allocation.findById(req.params.id).lean();
+    if (!item) return res.status(404).json({message:'Request not found'});
+
+    // An HOD/Dean can delete anything for cleanup. A faculty member can only
+    // delete their own request, and only before anyone has decided on it -
+    // once it's been approved or rejected, that decision is a record someone
+    // else made and shouldn't be erasable by the person it's about.
+    const isReviewer = ['hod','dean'].includes(req.user.role);
+    const isOwnUndecidedRequest = req.user.facultyId === item.facultyId && ['pending','recommended'].includes(item.status);
+    if (!isReviewer && !isOwnUndecidedRequest) {
+      return res.status(403).json({message:'You can only delete your own request while it is still awaiting review.'});
+    }
+
+    await Allocation.deleteOne({_id:item._id});
+
+    // If this request had already been approved, deleting it should give
+    // back the workload hours it was holding against that faculty member -
+    // otherwise the hours stay "spent" against someone with no allocation to
+    // show for it (mirrors the same release done on override, see
+    // routes/allocations.js).
+    if (item.status === 'approved') {
+      await applyWorkloadDelta(item.facultyId, -hoursForCourse(await findCourse(item.courseId)));
+    }
+
+    await AuditLog.create({actor:req.user.id,actorRole:req.user.role,action:'DELETE_ALLOCATION_REQUEST',entityType:'allocation',entityId:String(item._id),oldValue:item});
+    res.json({ok:true});
+  } catch(e){res.status(400).json({message:e.message});}
 });
 
 r.get('/audit', auth, role('hod','dean'), async (req,res)=>{
