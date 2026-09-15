@@ -351,14 +351,21 @@ r.delete('/requests/:id', auth, async (req,res) => {
     const item = await Allocation.findById(req.params.id).lean();
     if (!item) return res.status(404).json({message:'Request not found'});
 
-    // An HOD/Dean can delete anything for cleanup. A faculty member can only
-    // delete their own request, and only before anyone has decided on it -
-    // once it's been approved or rejected, that decision is a record someone
-    // else made and shouldn't be erasable by the person it's about.
+    // Creating a request on this page (POST /requests above) isn't restricted
+    // to "your own" faculty ID - any signed-in user can add a request for any
+    // faculty via the dropdown. Deleting should be at least as open for a
+    // still-undecided request, otherwise it depends on this account's login
+    // being correctly auto-linked to an exact Faculty record (matched by
+    // email/name against the dataset at login time), which isn't guaranteed
+    // for every real account the way it is for a demo faculty login - and a
+    // mismatch there would silently 403 a real user trying to delete a
+    // request they just made themselves. Once HOD/Dean has actually decided
+    // on a request (approved/rejected), removing that record is reserved for
+    // HOD/Dean only.
     const isReviewer = ['hod','dean'].includes(req.user.role);
-    const isOwnUndecidedRequest = req.user.facultyId === item.facultyId && ['pending','recommended'].includes(item.status);
-    if (!isReviewer && !isOwnUndecidedRequest) {
-      return res.status(403).json({message:'You can only delete your own request while it is still awaiting review.'});
+    const isUndecided = ['pending','recommended'].includes(item.status);
+    if (!isReviewer && !isUndecided) {
+      return res.status(403).json({message:'Only an HOD or Dean can delete a request that has already been decided.'});
     }
 
     await Allocation.deleteOne({_id:item._id});
