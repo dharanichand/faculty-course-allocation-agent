@@ -7,7 +7,16 @@ export default function Preferences(){
  const user=(()=>{try{return JSON.parse(sessionStorage.getItem('allocation_user')||'null')}catch{return null}})();
  const [faculty,setFaculty]=useState([]),[courses,setCourses]=useState([]),[facultyId,setFacultyId]=useState(user?.facultyId||''),[preferences,setPreferences]=useState([]),[message,setMessage]=useState(''),[error,setError]=useState('');
  const canChooseFaculty=user?.role==='hod'||user?.role==='dean';
- useEffect(()=>{Promise.all([apiRequest({method:'GET',url:'/data/faculty'}),apiRequest({method:'GET',url:'/data/courses'})]).then(([f,c])=>{const list=canChooseFaculty?(f.data||[]):(f.data||[]).filter(x=>x.facultyId===user?.facultyId);setFaculty(list);setCourses(c.data||[]);if(!facultyId&&list.length)setFacultyId(list[0].facultyId)}).catch(e=>setError(e?.response?.data?.message||'Could not load preference data'))},[]);
+ useEffect(()=>{Promise.all([apiRequest({method:'GET',url:'/data/faculty'}),apiRequest({method:'GET',url:'/data/courses'})]).then(([f,c])=>{
+  const all=Array.isArray(f.data)?f.data:[];
+  const list=canChooseFaculty?all:all.filter(x=>x.facultyId===user?.facultyId || (user?.email&&x.email===user.email) || (user?.name&&x.name===user.name));
+  setFaculty(list);
+  setCourses(c.data||[]);
+  const matched=list.find(x=>x.facultyId===user?.facultyId) || list.find(x=>user?.email&&x.email===user.email) || list.find(x=>user?.name&&x.name===user.name);
+  if(matched) setFacultyId(matched.facultyId);
+  else if(!facultyId&&list.length) setFacultyId(list[0].facultyId);
+  else if(!list.length&&!canChooseFaculty) setError('Faculty profile not found. Please sign out and sign in again so your faculty account can be linked.');
+}).catch(e=>setError(e?.response?.data?.message||'Could not load preference data'))},[]);
  useEffect(()=>{if(!facultyId)return;apiRequest({method:'GET',url:`/data/faculty/${facultyId}/preferences`}).then(r=>setPreferences(r.data.preferences||[])).catch(e=>setError(e?.response?.data?.message||'Could not load preferences'))},[facultyId]);
  const save=async()=>{try{setError('');const r=await apiRequest({method:'PUT',url:`/data/faculty/${facultyId}/preferences`,data:{preferences}});setPreferences(r.data.preferences||[]);setMessage('Preferences saved.');}catch(e){setError(e?.response?.data?.message||'Could not save preferences')}};
  const add=()=>setPreferences(v=>[...v,{courseId:courses.find(c=>!v.some(p=>p.courseId===c.courseId))?.courseId||'',rank:v.length+1}]);
