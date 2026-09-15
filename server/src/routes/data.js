@@ -82,6 +82,42 @@ r.get('/faculty/:id/preferences', auth, async (req,res) => {
   } catch(e) { res.status(500).json({message:e.message}); }
 });
 
+// RULE (bug fix): saving preferences on the Faculty document was completely
+// disconnected from the Allocation collection that the faculty dashboard
+// ("My requests"/"Approved"/"Pending review"), the HOD Requests page, and the
+// HOD Review queue all read from. A faculty member could save preferences
+// forever and it would never show up anywhere as an actual request - the
+// dashboard was guaranteed to show 0/0/0 for every faculty account. This
+// keeps the Allocation collection in sync with whatever the faculty member
+// currently has saved as their preferences:
+//  - a preferred course with no existing request gets a new pending one.
+//  - a course removed from the preference list has its still-undecided
+//    (pending/recommended) request withdrawn; anything the HOD already
+//    approved/rejected is left alone - a preference edit must never quietly
+//    reverse a decision that was already made.
+async function syncAllocationRequestsFromPreferences(facultyId, preferences) {
+  const courseIds = preferences.map(p => p.courseId);
+  const existing = await Allocation.find({ facultyId, courseId: { $in: courseIds } }).lean();
+  const existingCourseIds = new Set(existing.map(e => e.courseId));
+  const toCreate = preferences.filter(p => !existingCourseIds.has(p.courseId));
+  await Promise.all([
+    toCreate.length
+      ? Allocation.insertMany(toCreate.map(p => ({
+          facultyId,
+          courseId: p.courseId,
+          sectionId: '',
+          status: 'pending',
+          recommendationScore: null,
+          recommendationReason: 'Submitted by faculty as a ranked course preference.'
+        })), { ordered: false })
+      : Promise.resolve(),
+    Allocation.updateMany(
+      { facultyId, status: { $in: ['pending', 'recommended'] }, courseId: { $nin: courseIds } },
+      { $set: { status: 'rejected', overrideReason: 'Withdrawn: no longer listed in faculty preferences.' } }
+    )
+  ]);
+}
+
 r.put('/faculty/:id/preferences', auth, async (req,res) => {
   try {
     if (req.user.role !== 'hod' && req.user.role !== 'dean' && req.user.facultyId !== req.params.id) return res.status(403).json({message:'You may only update your own preferences'});
@@ -90,11 +126,24 @@ r.put('/faculty/:id/preferences', auth, async (req,res) => {
     if (dbReady()) {
       const faculty = await Faculty.findOneAndUpdate({facultyId:req.params.id},{$set:{preferences}},{new:true}).lean();
       if (!faculty) return res.status(404).json({message:'Faculty not found'});
+      await syncAllocationRequestsFromPreferences(faculty.facultyId, preferences);
       return res.json({facultyId:faculty.facultyId,preferences:faculty.preferences});
     }
     const faculty = memory.faculty.find(f => f.facultyId === req.params.id);
     if (!faculty) return res.status(404).json({message:'Faculty not found'});
     faculty.preferences = preferences;
+    const courseIds = preferences.map(p => p.courseId);
+    for (const item of memoryRequests) {
+      if (item.facultyId !== faculty.facultyId) continue;
+      if (['pending','recommended'].includes(item.status) && !courseIds.includes(item.courseId)) {
+        Object.assign(item, { status: 'rejected', overrideReason: 'Withdrawn: no longer listed in faculty preferences.' });
+      }
+    }
+    for (const p of preferences) {
+      if (!memoryRequests.some(item => item.facultyId === faculty.facultyId && item.courseId === p.courseId)) {
+        memoryRequests.unshift({ facultyId: faculty.facultyId, courseId: p.courseId, sectionId: '', status: 'pending', recommendationScore: null, recommendationReason: 'Submitted by faculty as a ranked course preference.' });
+      }
+    }
     res.json({facultyId:faculty.facultyId,preferences:faculty.preferences});
   } catch(e) { res.status(400).json({message:e.message}); }
 });

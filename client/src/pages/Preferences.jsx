@@ -18,7 +18,7 @@ export default function Preferences(){
   else if(!list.length&&!canChooseFaculty) setError('Faculty profile not found. Please sign out and sign in again so your faculty account can be linked.');
 }).catch(e=>setError(e?.response?.data?.message||'Could not load preference data'))},[]);
  useEffect(()=>{if(!facultyId)return;apiRequest({method:'GET',url:`/data/faculty/${facultyId}/preferences`}).then(r=>setPreferences(r.data.preferences||[])).catch(e=>setError(e?.response?.data?.message||'Could not load preferences'))},[facultyId]);
- const save=async()=>{try{setError('');const r=await apiRequest({method:'PUT',url:`/data/faculty/${facultyId}/preferences`,data:{preferences}});setPreferences(r.data.preferences||[]);setMessage('Preferences saved.');}catch(e){setError(e?.response?.data?.message||'Could not save preferences')}};
+ const save=async()=>{try{setError('');const r=await apiRequest({method:'PUT',url:`/data/faculty/${facultyId}/preferences`,data:{preferences}});setPreferences(r.data.preferences||[]);setMessage('Preferences saved. Your ranked courses have been filed as requests for HOD review.');}catch(e){setError(e?.response?.data?.message||'Could not save preferences')}};
  const add=()=>setPreferences(v=>[...v,{courseId:courses.find(c=>!v.some(p=>p.courseId===c.courseId))?.courseId||'',rank:v.length+1}]);
  return <div><PageTitle eyebrow="FACULTY INPUT" title="Course Preferences" desc="Submit ranked course preferences used by the verified allocation score."/>
   {error&&<div className="mb-4 p-3 rounded-xl alert-error text-sm">{error}</div>}{message&&<div className="mb-4 p-3 rounded-xl alert-success text-sm">{message}</div>}
