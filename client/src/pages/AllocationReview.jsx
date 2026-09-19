@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {Check,X,RotateCcw,Sparkles,Scale,History,GraduationCap,BriefcaseBusiness,ChevronLeft,ChevronRight,Square,CheckSquare,Wand2,Loader2,Search,AlertTriangle} from 'lucide-react';
 import {Card,PageTitle,Badge,AskAgentButton} from '../components/UI';
 import {apiRequest} from '../api';
+import {formatSection} from '../utils/section';
 
 const PAGE_SIZE=25;
 const TIER_TONE={1:'red',2:'amber',3:'blue',4:'slate'};
@@ -162,7 +163,7 @@ export default function AllocationReview(){
    <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-fuchsia-500/8 to-transparent">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
      <div>
-      <div className="text-xs font-bold text-fuchsia-700">{current.courseName} • {current.sectionId||'SECTION'}{current.role==='co'?' • Co-instructor':current.role==='lead'?' • Lead instructor':''}</div>
+      <div className="text-xs font-bold text-fuchsia-700">{current.courseName} • {formatSection(current.courseYear,current.sectionId)||'SECTION'}{current.role==='co'?' • Co-instructor':current.role==='lead'?' • Lead instructor':''}</div>
       <h2 className="font-display text-xl font-semibold mt-1 text-slate-800">{who(current.facultyName,current.facultyId)}</h2>
       <p className="text-sm text-slate-500 mt-1">{current.designation||'Faculty'} • {current.preferenceRank?`Preference #${current.preferenceRank}`:'Auto-assigned (no matching preference)'}</p>
      </div>
@@ -226,7 +227,7 @@ export default function AllocationReview(){
       <td className="px-4 py-3" onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(x._id)} onChange={()=>toggleSelected(x._id)} className="h-4 w-4 accent-fuchsia-700"/></td>
       <td className="px-4 py-3"><div className="text-sm font-semibold text-slate-800">{x.facultyName||'(name unavailable)'}</div><div className="text-xs text-slate-500">ID {x.facultyId}</div></td>
       <td className="px-4 py-3"><Badge tone={TIER_TONE[x.priorityTier]||'slate'}>{x.designation||x.tierLabel}</Badge></td>
-      <td className="px-4 py-3"><div className="text-sm text-slate-700">{x.courseName}</div><div className="text-xs text-slate-500">{x.sectionId}{x.role==='co'?' · co-instructor':''}</div></td>
+      <td className="px-4 py-3"><div className="text-sm text-slate-700">{x.courseName}</div><div className="text-xs text-slate-500">{formatSection(x.courseYear,x.sectionId)}{x.role==='co'?' · co-instructor':''}</div></td>
       <td className="px-4 py-3 text-sm font-bold text-fuchsia-700">{x.preferenceRank?`#${x.preferenceRank}`:<span className="text-slate-400 font-medium">Auto</span>}</td>
       <td className="px-4 py-3 text-sm text-slate-700">{x.hours||0} h</td>
       <td className="px-4 py-3 text-sm font-semibold text-slate-800">{x.recommendationScore??'—'}</td>

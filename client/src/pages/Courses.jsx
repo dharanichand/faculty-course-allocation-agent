@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {BookOpen,Clock3,Plus,Trash2,Trophy,Filter,Search,X,RefreshCcw,Loader2} from 'lucide-react';
 import {Card,PageTitle,Modal,Field,Badge,AskAgentButton} from '../components/UI';
 import {apiRequest} from '../api';
+import {formatSection} from '../utils/section';
 
 // Multiple independent filters can be combined at once: a faculty-status
 // filter (chips below) plus a free-text search box across code/name/dept.
@@ -128,7 +129,7 @@ export default function Courses(){
   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
    {visibleItems.map(c=>{
     const top=topByCourse[c.courseId];
-    const topSectionLabel=c.sections?.[0]?.sectionName?`Section ${c.sections[0].sectionName}`:'All sections';
+    const topSectionLabel=c.sections?.[0]?(`Section ${formatSection(c.year,c.sections[0].sectionId||c.sections[0].sectionName)}`):'All sections';
     return <Card key={c.courseId} className="p-5 card-hover">
      <div className="flex items-start justify-between">
       <div><div className="text-xs font-bold text-fuchsia-700">{c.courseCode}</div><h3 className="font-display font-semibold text-lg mt-1 text-slate-800">{c.courseName}</h3></div>
@@ -136,7 +137,7 @@ export default function Courses(){
      </div>
      <div className="grid grid-cols-3 gap-2 mt-5 text-xs">
       <div className="p-3 rounded-xl bg-slate-50"><div className="text-slate-500">Credits</div><b className="text-sm text-slate-800">{c.credits}</b></div>
-      <div className="p-3 rounded-xl bg-slate-50"><div className="text-slate-500">Sections</div><b className="text-sm text-slate-800">{(c.sections||[]).map(s=>s.sectionName||s).join(', ')||'A'}</b></div>
+      <div className="p-3 rounded-xl bg-slate-50"><div className="text-slate-500">Year</div><b className="text-sm text-slate-800">{c.year?`Year ${c.year}`:'—'}</b></div>
       <div className="p-3 rounded-xl bg-slate-50"><div className="text-slate-500">Hours</div><b className="text-sm text-slate-800">{(c.theoryHours||0)+(c.labHours||0)+(c.tutorialHours||0)}/wk</b></div>
      </div>
      <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-4 text-xs text-slate-500">

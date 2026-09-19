@@ -2,7 +2,7 @@ import React,{Component,useEffect} from 'react';
 import {NavLink,useLocation,useNavigate} from 'react-router-dom';
 import {Routes,Route} from 'react-router-dom';
 import {apiRequest} from './api';
-import {LayoutDashboard,BookOpen,Users,GitBranch,BrainCircuit,ClipboardCheck,ShieldCheck,FileText,Settings,Bot,LogOut,SlidersHorizontal,UserCheck,Bell} from 'lucide-react';
+import {LayoutDashboard,BookOpen,Users,GitBranch,BrainCircuit,ClipboardCheck,ShieldCheck,FileText,Settings,Bot,LogOut,SlidersHorizontal,UserCheck,Bell,Layers} from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import FacultyDashboard from './pages/FacultyDashboard';
 import Requests from './pages/Requests';
@@ -17,6 +17,7 @@ import SettingsPage from './pages/Settings';
 import Preferences from './pages/Preferences';
 import MyAllocation from './pages/MyAllocation';
 import Notifications from './pages/Notifications';
+import Sections from './pages/Sections';
 
 class PageErrorBoundary extends Component {
  state={error:null};
@@ -35,6 +36,7 @@ const nav=[
  {to:'/requests',label:'Faculty Requests',icon:ClipboardCheck},
  {to:'/faculty',label:'Faculty',icon:Users},
  {to:'/courses',label:'Courses & Sections',icon:BookOpen},
+ {to:'/sections',label:'Sections',icon:Layers},
  {to:'/conflicts',label:'Conflicts',icon:GitBranch},
  {to:'/review',label:'HOD Review',icon:ShieldCheck},
  {to:'/agent',label:'AI Agent',icon:BrainCircuit},

@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {Users,Plus,Search,Trash2,Download,AlertTriangle,TrendingDown,CheckCircle2} from 'lucide-react';
 import {Card,PageTitle,Modal,Field,Badge,AskAgentButton} from '../components/UI';
 import {apiRequest} from '../api';
+import {formatSection} from '../utils/section';
 
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -32,7 +33,7 @@ const TIER_TONE={1:'red',2:'amber',3:'blue',4:'slate'};
 function csvCell(v){return `"${String(v??'').replaceAll('"','""')}"`}
 function downloadFacultyCsv(rows,name='faculty_workload.csv'){
  const head=['Faculty ID','Name','Designation','Priority tier','Courses assigned','Course quota','Assigned hours/week','Prescribed min','Prescribed max','Workload status','Hours over max / under min','Years taught','Assigned courses'];
- const body=rows.map(x=>[x.facultyId,x.name,x.designation,x.tierLabel||x.priorityTier,x.assignedCount??0,x.courseQuota??'',x.assignedHours??0,x.prescribedMin??'',x.prescribedMax??'',(STATUS[x.workloadStatus]||{}).label||x.workloadStatus,x.hoursDelta||0,(x.yearGroups||[]).join('/'),(x.assignments||[]).map(a=>`${a.courseName} ${a.sectionId}${a.role==='co'?' (co)':''} [${a.hours}h]`).join('; ')]);
+ const body=rows.map(x=>[x.facultyId,x.name,x.designation,x.tierLabel||x.priorityTier,x.assignedCount??0,x.courseQuota??'',x.assignedHours??0,x.prescribedMin??'',x.prescribedMax??'',(STATUS[x.workloadStatus]||{}).label||x.workloadStatus,x.hoursDelta||0,(x.yearGroups||[]).join('/'),(x.assignments||[]).map(a=>`${a.courseName} ${formatSection(a.year,a.sectionId)}${a.role==='co'?' (co)':''} [${a.hours}h]`).join('; ')]);
  const csv=[head,...body].map(r=>r.map(csvCell).join(',')).join('\n');
  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
  const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);
@@ -115,7 +116,7 @@ export default function Faculty(){
       </div>
       <div className="mt-3 flex flex-wrap gap-2"><Badge tone={TIER_TONE[x.priorityTier]||'slate'}>{x.designation}</Badge>{x.preferenceSource==='synthetic'&&<Badge tone="slate">Preferences: generated</Badge>}</div>
       <div className="mt-4 text-xs text-slate-500">Assigned courses ({x.assignedCount||0} of {x.courseQuota??'—'}){year!=='all'&&` · showing ${YEAR_TABS.find(t=>t.id===year)?.label}`}</div>
-      <div className="mt-1 space-y-1">{(inYear||[]).map(a=><div key={a.allocationId} className="text-xs text-slate-700 flex justify-between gap-2"><span className="truncate">{a.courseName} <span className="text-slate-400">{a.sectionId.split('-').slice(-1)[0]}{a.role==='co'?' · co':''}</span></span><span className="text-slate-500 shrink-0">{a.hours}h{a.status==='approved'?' ✓':''}</span></div>)}{!(inYear||[]).length&&<div className="text-xs text-slate-400">No courses assigned yet</div>}</div>
+      <div className="mt-1 space-y-1">{(inYear||[]).map(a=><div key={a.allocationId} className="text-xs text-slate-700 flex justify-between gap-2"><span className="truncate">{a.courseName} <span className="text-slate-400">{formatSection(a.year,a.sectionId)}{a.role==='co'?' · co':''}</span></span><span className="text-slate-500 shrink-0">{a.hours}h{a.status==='approved'?' ✓':''}</span></div>)}{!(inYear||[]).length&&<div className="text-xs text-slate-400">No courses assigned yet</div>}</div>
       <div className="mt-3 flex flex-wrap gap-2 items-center justify-between">
        <div className="flex flex-wrap gap-2">
         <Badge tone={st.tone}>{x.assignedHours||0} h / {x.prescribedMin}–{x.prescribedMax} h</Badge>
