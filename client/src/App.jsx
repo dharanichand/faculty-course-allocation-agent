@@ -35,7 +35,7 @@ const nav=[
  {to:'/',label:'Dashboard',icon:LayoutDashboard},
  {to:'/requests',label:'Faculty Requests',icon:ClipboardCheck},
  {to:'/faculty',label:'Faculty',icon:Users},
- {to:'/courses',label:'Courses & Sections',icon:BookOpen},
+ {to:'/courses',label:'Courses',icon:BookOpen},
  {to:'/sections',label:'Sections',icon:Layers},
  {to:'/conflicts',label:'Conflicts',icon:GitBranch},
  {to:'/review',label:'HOD Review',icon:ShieldCheck},
@@ -101,7 +101,7 @@ function App(){
   <div className="h-screen overflow-hidden" style={{paddingTop:HEADER_H}}>
   {user?.role!=='faculty'&&loc.pathname!=='/agent'&&loc.pathname!=='/agent/chat'&&<button type="button" onClick={()=>navigate('/agent')} title="Ask the AI Allocation Agent" className={`fixed z-40 right-6 flex items-center gap-2 pl-3 pr-4 py-3 rounded-full btn-primary ${loc.pathname==='/review'?'bottom-24':'bottom-6'}`}><Bot size={19}/><span className="text-sm font-semibold hidden sm:inline">Ask AI Agent</span></button>}
   <main className="h-[calc(100vh-var(--app-header-height))] overflow-y-auto overscroll-contain p-4 sm:p-7 max-w-[1600px] mx-auto"><PageErrorBoundary><Routes><Route path="/" element={user?.role==='faculty'?<FacultyDashboard/>:<Dashboard/>}/><Route path="/dashboard" element={user?.role==='faculty'?<FacultyDashboard/>:<Dashboard/>}/><Route path="/requests" element={<Requests/>}/><Route path="/faculty-requests" element={<Requests/>}/>
-            <Route path="/faculty" element={user?.role==='faculty'?<FacultyProfile/>:<Faculty/>}/><Route path="/courses" element={<Courses/>}/><Route path="/courses-sections" element={<Courses/>}/><Route path="/conflicts" element={<Conflicts/>}/><Route path="/review" element={<AllocationReview/>}/><Route path="/hod-review" element={<AllocationReview/>}/><Route path="/agent" element={<AgentChat/>}/><Route path="/agent/chat" element={<AgentChat/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/preferences" element={<Preferences/>}/><Route path="/my-allocation" element={<MyAllocation/>}/><Route path="/notifications" element={<Notifications/>}/></Routes></PageErrorBoundary></main>
+            <Route path="/faculty" element={user?.role==='faculty'?<FacultyProfile/>:<Faculty/>}/><Route path="/courses" element={<Courses/>}/><Route path="/Sections" element={<Sections/>}/><Route path="/conflicts" element={<Conflicts/>}/><Route path="/review" element={<AllocationReview/>}/><Route path="/hod-review" element={<AllocationReview/>}/><Route path="/agent" element={<AgentChat/>}/><Route path="/agent/chat" element={<AgentChat/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/preferences" element={<Preferences/>}/><Route path="/my-allocation" element={<MyAllocation/>}/><Route path="/notifications" element={<Notifications/>}/></Routes></PageErrorBoundary></main>
   </div>
  </div>
 }
