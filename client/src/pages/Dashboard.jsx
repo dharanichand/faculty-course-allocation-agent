@@ -69,7 +69,7 @@ export default function Dashboard(){
  const startAllocation=async()=>{
   try{
    setAiRunning(true);setAiError('');
-   const r=await apiRequest({method:'POST',url:'/allocations/run-ai'});
+   const r=await apiRequest({method:'POST',url:'/allocations/auto-allocate',timeout:120000});
    setAiResult(r.data);
    setAiModalOpen(true);
    load();
@@ -94,8 +94,8 @@ export default function Dashboard(){
      <h1 className="font-display text-2xl sm:text-4xl font-semibold tracking-tight mt-2 text-slate-900">Faculty Course Allocation</h1>
      <p className="text-sm sm:text-base text-slate-600 mt-3 max-w-xl leading-relaxed">One workspace for real faculty, courses, requests, conflicts and AI recommendations — the agent watches every domain shown in the graphic and surfaces what needs your decision.</p>
      <div className="flex flex-wrap items-center gap-3 mt-6">
-    <button type="button" onClick={()=>navigate('/review')} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-primary text-sm">
-     <Wand2 size={15}/> Start Allocation
+    <button type="button" onClick={startAllocation} disabled={aiRunning} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-primary text-sm disabled:opacity-60">
+     {aiRunning?<Loader2 size={15} className="animate-spin"/>:<Wand2 size={15}/>} {aiRunning?'Allocating...':'Start Allocation'}
       </button>
       <Link to="/review" className="inline-flex items-center px-4 py-2.5 rounded-xl btn-outline text-sm">Review queue</Link>
       <Link to="/agent" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-outline text-sm"><Sparkles size={15}/> Ask the AI agent</Link>
@@ -105,20 +105,13 @@ export default function Dashboard(){
    </div>
   </div>
 
-  <Modal open={aiModalOpen} title="AI allocation run" onClose={()=>setAiModalOpen(false)}>
+  <Modal open={aiModalOpen} title="Automatic allocation" onClose={()=>setAiModalOpen(false)}>
    {aiResult&&<div>
-    <p className="text-sm text-slate-500 mb-3">{aiResult.coursesProcessed?`Processed ${aiResult.coursesProcessed} course${aiResult.coursesProcessed===1?'':'s'} with pending requests.`:'No pending requests were waiting for allocation.'}{!aiResult.aiConfigured&&' Groq API key not configured on the server — used the deterministic fallback instead.'}</p>
-    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-     {(aiResult.results||[]).map(r=><div key={r.courseId} className="p-3 rounded-xl border border-slate-200 bg-slate-50">
-      <div className="flex items-center justify-between gap-2">
-       <b className="text-sm text-slate-800">{r.courseName}</b>
-       {r.decision==='auto_approved'?<Badge tone="green">Assigned</Badge>:<Badge tone="amber">Needs HOD review</Badge>}
-      </div>
-      {r.decision==='auto_approved'&&<div className="text-xs text-slate-600 mt-1">Assigned to <b>{r.approvedFacultyName}</b> · score {r.score}/100</div>}
-      <div className="text-xs text-slate-500 mt-1">{r.summary}</div>
-     </div>)}
-     {aiResult.coursesProcessed===0&&<div className="text-sm text-slate-500 py-6 text-center">Nothing to allocate right now — every request already has a decision.</div>}
+    <p className="text-sm text-slate-600 mb-3">The agent allocated courses to every faculty member (Professor 1 course, Associate Professor 2, others 3) and resolved seat conflicts by designation priority. Nothing is final until the HOD approves it.</p>
+    <div className="grid grid-cols-2 gap-2 text-sm">
+     {[['Faculty allocated',aiResult.stats?.faculty],['Recommendations',aiResult.stats?.assignments],['From preferences',aiResult.stats?.fromPreference],['Auto-filled',aiResult.stats?.autoFilled],['Conflicts resolved by priority',aiResult.stats?.conflictsResolved],['Sections without instructor',aiResult.stats?.sectionsWithoutInstructor],['Overloaded faculty',aiResult.stats?.overloaded],['Very low workload',aiResult.stats?.underloaded]].map(([k,v])=><div key={k} className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[11px] text-slate-500">{k}</div><b className="text-slate-800 text-lg">{v??0}</b></div>)}
     </div>
+    <div className="mt-4 flex gap-2"><button type="button" onClick={()=>{setAiModalOpen(false);navigate('/review')}} className="btn-primary px-4 py-2 rounded-lg text-sm">Open HOD review</button><Link to="/conflicts" onClick={()=>setAiModalOpen(false)} className="btn-outline px-4 py-2 rounded-lg text-sm">View conflicts</Link></div>
    </div>}
   </Modal>
 
@@ -130,7 +123,7 @@ export default function Dashboard(){
   </div>
 
   <div className="grid xl:grid-cols-3 gap-5 mt-5">
-   <Tilt3D max={3} className="xl:col-span-2"><Card className="p-5 card-hover"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-slate-800">Workload distribution</h2><Link to="/faculty" className="text-xs font-semibold text-cyan-700 flex items-center gap-1 hover:text-cyan-700">View all faculty</Link></div><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={workload} margin={{left:-18,right:8,top:8,bottom:0}}><XAxis dataKey="name" tick={{fontSize:11,fill:'#64748b'}} axisLine={{stroke:'rgba(15,23,42,.12)'}} tickLine={false}/><YAxis tick={{fontSize:11,fill:'#64748b'}} axisLine={false} tickLine={false}/><Tooltip cursor={{fill:'rgba(15,23,42,.04)'}} contentStyle={tooltipStyle}/><defs><linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6"/><stop offset="100%" stopColor="#1d4ed8"/></linearGradient></defs><Bar dataKey="hours" radius={[6,6,0,0]} fill="url(#barFill)"/></BarChart></ResponsiveContainer></div><div className="flex gap-5 text-xs text-slate-500"><span>Target max: 18 hrs</span><span>Live backend data</span></div></Card></Tilt3D>
+   <Tilt3D max={3} className="xl:col-span-2"><Card className="p-5 card-hover"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-slate-800">Workload by designation</h2><Link to="/faculty" className="text-xs font-semibold text-cyan-700 flex items-center gap-1 hover:text-cyan-700">View all faculty</Link></div><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={workload} margin={{left:-18,right:8,top:8,bottom:0}}><XAxis dataKey="name" tick={{fontSize:11,fill:'#64748b'}} axisLine={{stroke:'rgba(15,23,42,.12)'}} tickLine={false}/><YAxis tick={{fontSize:11,fill:'#64748b'}} axisLine={false} tickLine={false}/><Tooltip cursor={{fill:'rgba(15,23,42,.04)'}} contentStyle={tooltipStyle}/><defs><linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6"/><stop offset="100%" stopColor="#1d4ed8"/></linearGradient></defs><Bar dataKey="hours" radius={[6,6,0,0]} fill="url(#barFill)"/></BarChart></ResponsiveContainer></div><div className="flex gap-5 text-xs text-slate-500"><span>Average assigned hours/week by designation</span><span className="text-rose-600">{data.workloadSummary?.overloaded??0} overloaded</span><span className="text-amber-600">{data.workloadSummary?.underloaded??0} very low workload</span></div></Card></Tilt3D>
    <Tilt3D max={3}><Card className="p-5 card-hover"><SectionHeader title="Review status"/><p className="text-xs text-slate-500 -mt-2 mb-2">Shows how many faculty requests are still waiting for HOD action.</p>
     <div className="h-44 relative">
      <ResponsiveContainer><PieChart margin={{top:4,right:4,bottom:4,left:4}}><Pie data={pref} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="92%" paddingAngle={4} stroke="none">{pref.map((x,i)=><Cell key={x.name} fill={x.color}/>)}</Pie><Tooltip formatter={(value,name)=>[value,name]} contentStyle={tooltipStyle}/></PieChart></ResponsiveContainer>
@@ -146,7 +139,7 @@ export default function Dashboard(){
 
   <div className="grid xl:grid-cols-3 gap-5 mt-5">
    <Tilt3D max={3} className="xl:col-span-2"><Card className="p-5 card-hover"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-slate-800">AI allocation insights</h2><Link to="/agent" className="text-xs font-semibold text-cyan-700 hover:text-cyan-700">Open AI Agent →</Link></div><div className="space-y-3"><Link to="/agent" className="w-full text-left p-4 rounded-xl bg-fuchsia-500/8 border border-fuchsia-400/20 flex gap-3 hover:bg-fuchsia-500/12 card-hover"><div className="icon-pop w-9 h-9 rounded-lg bg-slate-100 text-fuchsia-700 flex items-center justify-center shrink-0"><BrainCircuit size={18}/></div><div className="flex-1"><div className="flex items-center gap-2"><b className="text-sm text-slate-800">Agent-assisted allocation analysis</b><AiPill/></div><p className="text-xs text-slate-500 mt-1">The agent uses the faculty, course, request and workload data stored by the application.</p></div><ArrowUpRight size={16} className="text-fuchsia-700"/></Link><Link to="/conflicts" className="w-full text-left p-4 rounded-xl border border-slate-200 flex gap-3 hover:bg-slate-50 card-hover"><div className="icon-pop w-9 h-9 rounded-lg bg-emerald-400/10 text-emerald-700 flex items-center justify-center"><CheckCircle2 size={18}/></div><div><b className="text-sm text-slate-800">Review constraints and conflicts</b><p className="text-xs text-slate-500 mt-1">Open conflicts before approving recommendations.</p></div></Link></div></Card></Tilt3D>
-   <Tilt3D max={3}><Card className="p-5 card-hover"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-slate-800">Review queue</h2><Link to="/review" className="text-xs font-semibold text-cyan-700 hover:text-cyan-700">View all →</Link></div><div className="space-y-1">{(data.pending||[]).slice(0,4).map((x)=><Link to="/review" className="w-full text-left py-3 border-b last:border-0 border-slate-200 flex items-center justify-between" key={x._id}><div><b className="text-sm text-slate-800">{x.courseId}</b><div className="text-xs text-slate-500">Faculty {x.facultyId}</div></div><Badge tone="red">Pending</Badge></Link>)}{!data.pending?.length&&<p className="text-sm text-slate-500 py-5">No allocations waiting for HOD review.</p>}</div></Card></Tilt3D>
+   <Tilt3D max={3}><Card className="p-5 card-hover"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-slate-800">Review queue</h2><Link to="/review" className="text-xs font-semibold text-cyan-700 hover:text-cyan-700">View all →</Link></div><div className="space-y-1">{(data.pending||[]).slice(0,4).map((x)=><Link to="/review" className="w-full text-left py-3 border-b last:border-0 border-slate-200 flex items-center justify-between" key={x._id}><div><b className="text-sm text-slate-800">{x.facultyName?`${x.facultyName} (${x.facultyId})`:`Faculty ${x.facultyId}`}</b><div className="text-xs text-slate-500">{x.courseName||x.courseId}{x.sectionId?` · ${x.sectionId}`:''}</div></div><Badge tone="red">Pending</Badge></Link>)}{!data.pending?.length&&<p className="text-sm text-slate-500 py-5">No allocations waiting for HOD review.</p>}</div></Card></Tilt3D>
   </div>
 
   <Card className="mt-5 p-5"><SectionHeader title="Allocation readiness"/><div className="grid md:grid-cols-4 gap-5"><div><div className="flex justify-between text-xs mb-2 text-slate-500"><span>Requests</span><b className="text-slate-700">{data.requests?Math.round((data.requests-data.pendingReview)/data.requests*100):0}%</b></div><Progress value={data.requests?((data.requests-data.pendingReview)/data.requests*100):0}/></div><div><div className="flex justify-between text-xs mb-2 text-slate-500"><span>Faculty loaded</span><b className="text-slate-700">{data.faculty?100:0}%</b></div><Progress value={data.faculty?100:0}/></div><div><div className="flex justify-between text-xs mb-2 text-slate-500"><span>Courses loaded</span><b className="text-slate-700">{data.courses?100:0}%</b></div><Progress value={data.courses?100:0}/></div><div><div className="flex justify-between text-xs mb-2 text-slate-500"><span>HOD decisions</span><b className="text-slate-700">{data.requests?Math.round((data.requests-data.pendingReview)/data.requests*100):0}%</b></div><Progress value={data.requests?((data.requests-data.pendingReview)/data.requests*100):0}/></div></div></Card>

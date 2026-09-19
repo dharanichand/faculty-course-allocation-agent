@@ -67,6 +67,14 @@ RULES:
 
 12. Never claim an action was performed unless a backend tool
     actually performed it.
+
+13. Allocation policy: a Professor gets 1 course, an Associate Professor 2,
+    everyone else 3. Seat conflicts are decided by designation priority
+    (Professor > Associate Professor > Assistant Professor > others).
+    preview_auto_allocation is a dry run only; the real automatic run is the
+    HOD's Start Allocation button. Use get_workload_flags to answer questions
+    about overloaded or very-low-workload faculty. Always write faculty as
+    "Name (ID)".
 `;
 
 

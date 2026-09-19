@@ -4,6 +4,7 @@ import {validate} from '../middleware/validate.js';
 import {idParam,bulkIdsBody,bulkRejectBody,rejectBody,overrideBody} from '../validation/schemas.js';
 import Allocation from '../models/Allocation.js';
 import Faculty from '../models/Faculty.js';
+import Course from '../models/Course.js';
 import AuditLog from '../models/AuditLog.js';
 import {pendingAllocations,decideMemoryAllocation,allFaculty,allCourses,memoryRequests,pendingConflicts,findFaculty,findCourse,applyWorkloadDelta,hoursForCourse} from '../data/store.js';
 import {optimizeSemesterAllocation} from '../services/allocationOptimizer.js';
@@ -12,6 +13,9 @@ import crypto from 'crypto';
 import {sendAllocationDecisionEmail,sendReassignmentEmail,sendUnassignmentEmail} from '../services/emailService.js';
 import {calculateRecommendationScore} from '../tools/allocationTools.js';
 import {classifyCourseAllocation} from '../services/aiAllocation.js';
+import {runAndPersistAutoAllocation} from '../services/allocationRunner.js';
+import {buildWorkloadReport,summarizeWorkload} from '../services/workloadReport.js';
+import {TIER_LABELS} from '../services/autoAllocator.js';
 import mongoose from 'mongoose';
 
 const r=Router();
@@ -84,14 +88,46 @@ async function notifyReassignment(courseId,sectionId,previousFacultyId,newFacult
  }catch(e){console.error('Reassignment email failed:',e.message);}
 }
 
-r.get('/',auth,async(req,res)=>{try{
-  const rows=await pendingAllocations();
-  // Attach facultyName so the HOD Review screen can show "Name (ID)".
-  // Looks up all faculty (including inactive) so a name is never missing.
+// HOD review queue. Every row carries the faculty NAME and ID together (plus
+// designation, priority tier, course, section and workload) so the UI never has
+// to show a bare ID.
+async function enrichAllocations(rows){
   const ids=[...new Set(rows.map(x=>x.facultyId).filter(Boolean))];
-  const profiles=ids.length?await Faculty.find({facultyId:{$in:ids}}).select('facultyId name').lean():[];
-  const names=new Map(profiles.map(f=>[f.facultyId,f.name]));
-  res.json(rows.map(x=>({...x,facultyName:names.get(x.facultyId)||x.facultyName||''})));
+  const [profiles,courses,report]=await Promise.all([
+   ids.length?Faculty.find({facultyId:{$in:ids}}).select('facultyId name designation priorityTier courseQuota').lean():[],
+   Course.find({}).select('courseId courseName year program hoursPerSection').lean(),
+   buildWorkloadReport({includeInactive:true})
+  ]);
+  const byFaculty=new Map(profiles.map(f=>[f.facultyId,f]));
+  const byCourse=new Map(courses.map(c=>[c.courseId,c]));
+  const load=new Map(report.map(f=>[f.facultyId,f]));
+  return rows.map(x=>{
+   const f=byFaculty.get(x.facultyId)||{},c=byCourse.get(x.courseId)||{},l=load.get(x.facultyId)||{};
+   const tier=Number(x.priorityTier)||Number(f.priorityTier)||4;
+   return {...x,
+    facultyName:f.name||x.facultyName||'',
+    designation:f.designation||x.designation||'',
+    priorityTier:tier,tierLabel:TIER_LABELS[tier]||'Other faculty',
+    courseName:c.courseName||x.courseName||x.courseId,
+    courseYear:c.year||x.courseYear||'',program:c.program||'',
+    hours:Number(x.hours)||Number(c.hoursPerSection)||0,
+    facultyAssignedHours:l.assignedHours??null,facultyAssignedCount:l.assignedCount??null,
+    facultyQuota:Number(f.courseQuota)||null,
+    facultyPrescribedMin:l.prescribedMin??null,facultyPrescribedMax:l.prescribedMax??null,facultyWorkloadStatus:l.workloadStatus||''
+   };
+  });
+}
+
+// The undecided queue, enriched and sorted by priority tier -> faculty name -> course.
+// Used by GET / AND by every approve/reject/override response so names never disappear.
+async function remainingQueue(){
+  const enriched=await enrichAllocations(await pendingAllocations());
+  enriched.sort((a,b)=>a.priorityTier-b.priorityTier||String(a.facultyName).localeCompare(String(b.facultyName))||String(a.courseName).localeCompare(String(b.courseName))||String(a.sectionId).localeCompare(String(b.sectionId)));
+  return enriched;
+}
+
+r.get('/',auth,async(req,res)=>{try{
+  res.json(await remainingQueue());
  }catch(e){res.status(500).json({message:e.message})}});
 
 r.get('/my',auth,async(req,res)=>{
@@ -102,7 +138,7 @@ r.get('/my',auth,async(req,res)=>{
   const rows=dbReady()?await Allocation.find({facultyId:target}).sort({createdAt:-1}).lean():memoryRequests.filter(x=>x.facultyId===target);
   res.json(rows.map(item=>({
    ...item,courseName:courses.get(item.courseId)?.courseName||item.courseId,
-   statusLabel:item.status==='approved'?'Approved allocation':item.status==='pending'?'Pending HOD review':'Not selected',
+   statusLabel:item.status==='approved'?'Approved allocation':(item.status==='pending'||item.status==='recommended')?'Recommended - pending HOD approval':'Not selected',hours:Number(item.hours)||Number(courses.get(item.courseId)?.hoursPerSection)||0,roleLabel:item.role==='co'?'Co-instructor':item.role==='lead'?'Lead instructor':'',
    justification:item.recommendationReason||item.overrideReason||'No justification has been recorded yet.'
   })));
  }catch(e){res.status(500).json({message:e.message})}
@@ -131,9 +167,9 @@ r.get('/export',auth,role('hod','dean'),async(req,res)=>{
  try{
   const rows=dbReady()?await Allocation.find({status:'approved'}).sort({courseId:1}).lean():memoryRequests.filter(x=>x.status==='approved');
   const courses=new Map((await allCourses()).map(c=>[c.courseId,c])); const faculty=new Map((await allFaculty()).map(f=>[f.facultyId,f]));
-  const data=rows.map(x=>({allocationId:String(x._id),courseId:x.courseId,courseName:courses.get(x.courseId)?.courseName||x.courseId,sectionId:x.sectionId||'',facultyId:x.facultyId,facultyName:faculty.get(x.facultyId)?.name||x.facultyId,status:'approved',justification:x.recommendationReason||x.overrideReason||''}));
+  const data=rows.map(x=>({allocationId:String(x._id),courseId:x.courseId,courseName:courses.get(x.courseId)?.courseName||x.courseId,sectionId:x.sectionId||'',facultyId:x.facultyId,facultyName:faculty.get(x.facultyId)?.name||x.facultyId,designation:faculty.get(x.facultyId)?.designation||x.designation||'',courseYear:courses.get(x.courseId)?.year||x.courseYear||'',role:x.role||'',hours:Number(x.hours)||0,status:'approved',justification:x.recommendationReason||x.overrideReason||''}));
   if(String(req.query.format||'json').toLowerCase()==='csv'){
-   const fields=['allocationId','courseId','courseName','sectionId','facultyId','facultyName','status','justification'];
+   const fields=['allocationId','courseId','courseName','courseYear','sectionId','role','facultyId','facultyName','designation','hours','status','justification'];
    const quote=value=>`"${String(value??'').replace(/"/g,'""')}"`;
    const csv=[fields.join(','),...data.map(row=>fields.map(field=>quote(row[field])).join(','))].join('\n');
    res.type('text/csv').attachment('approved_allocations.csv').send(csv); return;
@@ -154,11 +190,30 @@ r.get('/course/:courseId/candidates',auth,role('hod','dean'),async(req,res)=>{
 
 r.get('/dashboard',auth,async(req,res)=>{
  try{
-  const [fs,cs,ps]=await Promise.all([allFaculty(),allCourses(),pendingAllocations()]);
-  const workload=fs.map(f=>({name:(f.name||'').replace(/^Dr\.\s*/,'').split(' ')[0],hours:Number(f.currentWorkload)||0,max:Number(f.maxWorkload)||18}));
+  const [report,cs,ps]=await Promise.all([buildWorkloadReport(),allCourses(),pendingAllocations()]);
+  // Average assigned hours per designation - a readable chart for 100+ faculty.
+  const groups=new Map();
+  for(const f of report){const k=f.designation||'Other';const g=groups.get(k)||{name:k,total:0,n:0,max:f.prescribedMax};g.total+=f.assignedHours;g.n++;groups.set(k,g)}
+  const workload=[...groups.values()].map(g=>({name:g.name.replace('Assistant Professor','Asst. Prof.').replace('Associate Professor','Assoc. Prof.'),hours:Math.round(g.total/g.n*10)/10,max:g.max}));
   const conflicts=await pendingConflicts();
   const requestsCount=await Allocation.countDocuments({});
-  res.json({faculty:fs.length,courses:cs.length,requests:requestsCount,pendingReview:ps.length,conflicts:conflicts.length,workload,pending:ps});
+  const pending=(await enrichAllocations(ps.slice(0,8)));
+  res.json({faculty:report.length,courses:cs.length,requests:requestsCount,pendingReview:ps.length,conflicts:conflicts.length,workload,workloadSummary:summarizeWorkload(report),pending});
+ }catch(e){res.status(500).json({message:e.message})}
+});
+
+// Per-faculty workload report. ?status=overloaded|underloaded|balanced|all
+r.get('/workload-report',auth,role('hod','dean'),async(req,res)=>{
+ try{
+  const status=String(req.query.status||'all').toLowerCase();
+  const rows=await buildWorkloadReport();
+  const filtered=status==='all'?rows:rows.filter(x=>x.workloadStatus===status);
+  res.json({generatedAt:new Date().toISOString(),summary:summarizeWorkload(rows),status,rows:filtered.map(x=>({
+   facultyId:x.facultyId,name:x.name,designation:x.designation,tierLabel:x.tierLabel,priorityTier:x.priorityTier,quota:x.courseQuota,
+   assignedCount:x.assignedCount,assignedHours:x.assignedHours,prescribedMin:x.prescribedMin,prescribedMax:x.prescribedMax,
+   workloadStatus:x.workloadStatus,hoursDelta:x.hoursDelta,yearGroups:x.yearGroups,
+   courses:x.assignments.map(a=>`${a.courseName} ${a.sectionId}${a.role==='co'?' (co-instructor)':''} [${a.hours}h]`).join('; ')
+  }))});
  }catch(e){res.status(500).json({message:e.message})}
 });
 
@@ -172,91 +227,21 @@ r.get('/dashboard',auth,async(req,res)=>{
 // If Groq is unavailable, a local deterministic version of the same rule set
 // is used so the button always finishes and nothing is left silently unprocessed.
 // ==========================================================================
-r.post('/run-ai',auth,role('hod'),async(req,res)=>{
+// AUTOMATIC ALLOCATION. One click, no manual course-by-course picking: the
+// allocator (services/autoAllocator.js) reads every faculty preference, applies
+// the designation quotas (Professor 1 / Associate 2 / others 3) and resolves
+// conflicts by priority (Professor > Associate > Assistant > others). Results
+// are stored as "recommended" for HOD review; approved rows are kept as-is.
+async function handleAutoAllocate(req,res){
  try{
-  const [pending,courses]=await Promise.all([pendingAllocations(),allCourses()]);
-  const courseById=new Map(courses.map(c=>[c.courseId,c]));
-
-  const byCourse=new Map();
-  for(const item of pending){
-   if(!byCourse.has(item.courseId))byCourse.set(item.courseId,[]);
-   byCourse.get(item.courseId).push(item);
-  }
-
-  const results=[];
-  const aiConfigured=!!process.env.GROQ_API_KEY;
-
-  for(const [courseId,requests] of byCourse){
-   const course=courseById.get(courseId)||await findCourse(courseId);
-   const facultyIds=[...new Set(requests.map(x=>x.facultyId))];
-   const candidates=[];
-   for(const facultyId of facultyIds)candidates.push(await calculateRecommendationScore(facultyId,courseId));
-   candidates.sort((a,b)=>b.score-a.score);
-
-   let ai=await classifyCourseAllocation({course,candidates});
-   let usedAi=!!ai;
-
-   if(!ai){
-    // Deterministic fallback mirroring the same rules the AI is instructed to follow,
-    // used only when GROQ_API_KEY is missing or the API call failed.
-    const eligible=candidates.filter(c=>!c.hardViolations||c.hardViolations.length===0);
-    let decision='escalate',approvedFacultyId=null;
-    if(eligible.length===1&&eligible[0].score>=75){decision='auto_approve';approvedFacultyId=eligible[0].facultyId;}
-    else if(eligible.length>1&&eligible[0].score>=75&&(eligible[0].score-eligible[1].score)>=8){decision='auto_approve';approvedFacultyId=eligible[0].facultyId;}
-    ai={
-     courseId,decision,approvedFacultyId,
-     candidates:candidates.map(c=>({facultyId:c.facultyId,flag:(c.hardViolations&&c.hardViolations.length)?'conflict':(c.score>=75?'perfect':'compromise'),reason:(c.hardViolations&&c.hardViolations.length)?c.hardViolations.join('; '):`Deterministic score ${c.score}/100.`})),
-     summary:decision==='auto_approve'?`Deterministic scoring auto-approved ${approvedFacultyId} (AI service unavailable).`:'Escalated for HOD review (AI service unavailable).'
-    };
-   }
-
-   // Hard safety re-check: never write an approval the backend itself cannot verify.
-   const winner=candidates.find(c=>c.facultyId===ai.approvedFacultyId);
-   const safeApprove=ai.decision==='auto_approve'&&winner&&(!winner.hardViolations||winner.hardViolations.length===0);
-
-   if(safeApprove){
-    for(const reqItem of requests){
-     if(reqItem.facultyId===winner.facultyId){
-      if(dbReady()){
-       await Allocation.findByIdAndUpdate(reqItem._id,{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date(),recommendationScore:winner.score,recommendationReason:ai.summary}});
-       await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'AI_AUTO_APPROVE_ALLOCATION',entityType:'allocation',entityId:String(reqItem._id),newValue:{...reqItem,status:'approved'},reason:ai.summary});
-       await applyWorkloadDelta(reqItem.facultyId,hoursForCourse(course));
-      }else{
-       await decideMemoryAllocation(reqItem._id,'approved',{approvedBy:req.user.id,approvedAt:new Date(),recommendationScore:winner.score,recommendationReason:ai.summary});
-      }
-      notifyDecision(reqItem,'approved',ai.summary);
-     }else{
-      const rejectReason='AI agent auto-approved another candidate for this course.';
-      if(dbReady()){
-       await Allocation.findByIdAndUpdate(reqItem._id,{$set:{status:'rejected',overrideReason:rejectReason}});
-      }else{
-       await decideMemoryAllocation(reqItem._id,'rejected',{overrideReason:rejectReason});
-      }
-      notifyDecision(reqItem,'rejected',rejectReason);
-     }
-    }
-    results.push({courseId,courseName:course?.courseName||courseId,decision:'auto_approved',approvedFacultyId:winner.facultyId,approvedFacultyName:winner.verified?.faculty||winner.facultyId,score:winner.score,summary:ai.summary,usedAi});
-   }else{
-    // Escalate: leave the requests pending for HOD review, but attach the AI's
-    // reasoning to each candidate request so the Review queue shows it.
-    for(const reqItem of requests){
-     const c=ai.candidates?.find(x=>x.facultyId===reqItem.facultyId);
-     const patch={recommendationReason:c?.reason||ai.summary,aiFlag:c?.flag||'conflict'};
-     if(dbReady()){
-      await Allocation.findByIdAndUpdate(reqItem._id,{$set:patch});
-     }else{
-      const it=memoryRequests.find(x=>x._id===reqItem._id);
-      if(it)Object.assign(it,patch);
-     }
-    }
-    results.push({courseId,courseName:course?.courseName||courseId,decision:'escalated',summary:ai.summary,candidateCount:candidates.length,usedAi});
-   }
-  }
-
-  const remaining=await pendingAllocations();
-  res.json({ok:true,aiConfigured,coursesProcessed:results.length,results,remaining});
+  const dryRun=String(req.query?.dryRun||req.body?.dryRun||'')==='true';
+  const result=await runAndPersistAutoAllocation({actor:req.user?.id||'hod',actorRole:req.user?.role||'hod',dryRun});
+  const remaining=dryRun?[]:await pendingAllocations();
+  res.json({ok:true,...result,coursesProcessed:result.stats.assignments,remainingCount:remaining.length});
  }catch(e){res.status(500).json({message:e.message})}
-});
+}
+r.post('/auto-allocate',auth,role('hod'),handleAutoAllocate);
+r.post('/run-ai',auth,role('hod'),handleAutoAllocate); // legacy endpoint name used by the dashboard
 
 // ==========================================================================
 // SEMESTER-WIDE OPTIMIZATION (Agent 3 workflow steps 6-8)
@@ -332,7 +317,7 @@ r.post('/optimize/:jobId/apply',auth,role('hod'),async(req,res)=>{
     applied.push(row.courseId);
    }
   }
-  const remaining=await pendingAllocations();
+  const remaining=await remainingQueue();
   res.json({ok:true,applied,remaining});
  }catch(e){res.status(400).json({message:e.message})}
 });
@@ -355,15 +340,17 @@ r.post('/bulk-approve',auth,role('hod'),validate({body:bulkIdsBody}),async(req,r
    const docs=await Allocation.find({_id:{$in:ids},status:{$in:['pending','recommended']}});
    if(!docs.length)return res.status(404).json({message:'No selected pending allocations found.'});
    const result=await Allocation.updateMany({_id:{$in:docs.map(x=>x._id)},status:{$in:['pending','recommended']}},{$set:{status:'approved',approvedBy:req.user.id,approvedAt:new Date()}});
-   const courseHoursCache=new Map();
-   for(const d of docs){
-    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(d._id),newValue:{...d.toObject(),status:'approved',approvedBy:req.user.id}});
-    // Keep Faculty.currentWorkload real so future scoring/hard-violation checks see it (see applyWorkloadDelta comment in store.js).
-    if(!courseHoursCache.has(d.courseId))courseHoursCache.set(d.courseId,hoursForCourse(await findCourse(d.courseId)));
-    await applyWorkloadDelta(d.facultyId,courseHoursCache.get(d.courseId));
-   }
+   // Batched: one insert for the audit trail and one bulkWrite for workload, instead of
+   // 2-3 database round-trips per row (which made "approve all" take minutes).
+   await AuditLog.insertMany(docs.map(d=>({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(d._id),newValue:{...d.toObject(),status:'approved',approvedBy:req.user.id}})),{ordered:false});
+   const courseIds=[...new Set(docs.map(d=>d.courseId))];
+   const courseDocs=await Course.find({courseId:{$in:courseIds}}).lean();
+   const hoursByCourse=new Map(courseDocs.map(c=>[c.courseId,hoursForCourse(c)]));
+   const delta=new Map();
+   for(const d of docs)delta.set(d.facultyId,(delta.get(d.facultyId)||0)+(Number(d.hours)||hoursByCourse.get(d.courseId)||0));
+   if(delta.size)await Faculty.bulkWrite([...delta].map(([facultyId,h])=>({updateOne:{filter:{facultyId},update:{$inc:{currentWorkload:h}}}})));
    Promise.allSettled(docs.map(d=>notifyDecision(d,'approved')));
-   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   const remaining=await remainingQueue();
    return res.json({ok:true,updated:result.modifiedCount,remaining});
   }
   let updated=0;
@@ -389,7 +376,7 @@ r.post('/bulk-reject',auth,role('hod'),validate({body:bulkRejectBody}),async(req
     await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'REJECT_ALLOCATION',entityType:'allocation',entityId:String(d._id),newValue:{...d.toObject(),status:'rejected',overrideReason:reason},reason});
    }
    Promise.allSettled(docs.map(d=>notifyDecision(d,'rejected',reason)));
-   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   const remaining=await remainingQueue();
    return res.json({ok:true,updated:result.modifiedCount,remaining});
   }
   let updated=0;
@@ -424,7 +411,7 @@ r.post('/:id/approve',auth,role('hod'),validate({params:idParam}),async(req,res)
    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'APPROVE_ALLOCATION',entityType:'allocation',entityId:String(item._id),newValue:item});
    await applyWorkloadDelta(item.facultyId,hoursForCourse(await findCourse(item.courseId)));
    notifyDecision(item,'approved');
-   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   const remaining=await remainingQueue();
    return res.json({ok:true,allocation:item,remaining});
   }
 
@@ -456,7 +443,7 @@ r.post('/:id/reject',auth,role('hod'),validate({params:idParam,body:rejectBody})
    item=await Allocation.findById(req.params.id).lean();
    await AuditLog.create({actor:req.user.id,actorRole:'hod',action:'REJECT_ALLOCATION',entityType:'allocation',entityId:String(item._id),newValue:item,reason});
    notifyDecision(item,'rejected',reason);
-   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   const remaining=await remainingQueue();
    return res.json({ok:true,allocation:item,remaining});
   }
   item=await decideMemoryAllocation(req.params.id,'rejected',{overrideReason:req.body.reason||''});
@@ -489,7 +476,7 @@ r.post('/:id/override',auth,role('hod'),validate({params:idParam,body:overrideBo
    if(wasApproved && previousFacultyId && previousFacultyId!==req.body.facultyId) await applyWorkloadDelta(previousFacultyId,-overrideHours);
    if(previousFacultyId!==req.body.facultyId) await applyWorkloadDelta(req.body.facultyId,overrideHours);
    notifyReassignment(courseId,sectionId,previousFacultyId,req.body.facultyId,reason);
-   const remaining=await Allocation.find({status:{$in:['pending','recommended']}}).sort({createdAt:1}).lean();
+   const remaining=await remainingQueue();
    return res.json({ok:true,allocation:item,remaining});
   }
   {

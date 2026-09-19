@@ -16,6 +16,9 @@ import {
   optimizeSemesterAllocation
 } from '../services/allocationOptimizer.js';
 
+import { buildWorkloadReport, summarizeWorkload } from '../services/workloadReport.js';
+import { runAndPersistAutoAllocation } from '../services/allocationRunner.js';
+
 
 // ======================================================
 // GROQ / OPENAI-COMPATIBLE TOOL DEFINITIONS
@@ -334,6 +337,49 @@ export const toolDefinitions = [
     type: 'function',
 
     function: {
+      name: 'get_workload_flags',
+
+      description:
+        'List faculty whose assigned weekly teaching hours are above their prescribed maximum (overloaded) or clearly below their prescribed minimum (very low / underloaded), with names, IDs, designations, hours and assigned courses. Read-only.',
+
+      parameters: {
+        type: 'object',
+
+        properties: {
+          status: { type: 'string', enum: ['overloaded', 'underloaded', 'both'], description: 'Which group to list. Defaults to both.' }
+        },
+
+        required: [],
+
+        additionalProperties: false
+      }
+    }
+  },
+
+
+  {
+    type: 'function',
+
+    function: {
+      name: 'preview_auto_allocation',
+
+      description:
+        'Dry-run the automatic allocator (Professor 1 course, Associate Professor 2, others 3; conflicts resolved Professor > Associate > Assistant > others) and report the statistics. This tool MUST NOT modify the database; the HOD applies a real run with the Start Allocation button.',
+
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+        additionalProperties: false
+      }
+    }
+  },
+
+
+  {
+    type: 'function',
+
+    function: {
       name: 'what_if_assignment',
 
       description:
@@ -374,6 +420,21 @@ export const toolDefinitions = [
 // ======================================================
 
 export const toolFns = {
+  get_workload_flags: async ({ status = 'both' } = {}) => {
+    const rows = await buildWorkloadReport();
+    const pick = rows.filter(r => status === 'both' ? ['overloaded', 'underloaded'].includes(r.workloadStatus) : r.workloadStatus === status);
+    return {
+      summary: summarizeWorkload(rows),
+      faculty: pick.map(r => ({
+        facultyId: r.facultyId, name: r.name, designation: r.designation, status: r.workloadStatus,
+        assignedHours: r.assignedHours, prescribedMin: r.prescribedMin, prescribedMax: r.prescribedMax,
+        courses: r.assignments.map(a => `${a.courseName} ${a.sectionId}`)
+      }))
+    };
+  },
+
+  preview_auto_allocation: async () => runAndPersistAutoAllocation({ dryRun: true }),
+
 
   // ----------------------------------------------------
   // SEARCH FACULTY

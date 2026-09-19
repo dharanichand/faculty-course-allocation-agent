@@ -185,6 +185,7 @@ export async function pendingAllocations(scope = {}) {
 // --------------------------------------------------------------------------
 export function hoursForCourse(course) {
   if (!course) return 0;
+  if (Number(course.hoursPerSection)) return Number(course.hoursPerSection);
   return Number(course.credits) || ((Number(course.theoryHours) || 0) + (Number(course.tutorialHours) || 0) + (Number(course.labHours) || 0)) || 3;
 }
 

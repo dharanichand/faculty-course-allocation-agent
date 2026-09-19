@@ -6,6 +6,8 @@ import Course from '../models/Course.js';
 import Conflict from '../models/Conflict.js';
 import Allocation from '../models/Allocation.js';
 import AuditLog from '../models/AuditLog.js';
+import { normalizeDesignation } from '../services/designationPolicy.js';
+import { buildWorkloadReport } from '../services/workloadReport.js';
 import { memory, memoryFaculty, memoryCourses, memoryRequests, getAllocationConfig, saveAllocationConfig, findFaculty } from '../data/store.js';
 
 const r = Router();
@@ -19,7 +21,9 @@ const canEditConfig = user => ['hod','dean'].includes(user?.role);
 
 r.get('/faculty', auth, async (req,res) => {
   try {
-    const data = dbReady() ? await Faculty.find({ status: { $ne: 'inactive' } }).sort({name:1}).lean() : memory.faculty;
+    // Enriched with assigned courses, hours, prescribed range and workload status
+    // (overloaded / underloaded / balanced) - see services/workloadReport.js.
+    const data = dbReady() ? await buildWorkloadReport() : memory.faculty;
     res.json(data);
   } catch(e) { res.status(500).json({message:e.message}); }
 });
@@ -37,11 +41,12 @@ r.post('/faculty', auth, role('hod'), async (req,res) => {
       name: body.name,
       email,
       department: body.department || 'CSE',
-      designation: body.designation || 'Assistant Professor',
+      designation: normalizeDesignation(body.designation || 'Assistant Professor').designation,
+      ...(() => { const d = normalizeDesignation(body.designation || 'Assistant Professor'); return { priorityTier: d.tier, courseQuota: d.quota, prescribedMin: d.prescribedMin, prescribedMax: d.prescribedMax, minWorkload: d.prescribedMin }; })(),
       qualifications: Array.isArray(body.qualifications) ? body.qualifications : [],
       specializations: Array.isArray(body.specializations) ? body.specializations : [],
       expertise: Array.isArray(body.expertise) ? body.expertise : [],
-      maxWorkload: Number(body.maxWorkload) || 18,
+      maxWorkload: Number(body.maxWorkload) || normalizeDesignation(body.designation || 'Assistant Professor').prescribedMax,
       currentWorkload: Number(body.currentWorkload) || 0,
       availability: Array.isArray(body.availability) ? body.availability : [],
       onLeave: !!body.onLeave,
@@ -68,6 +73,10 @@ r.post('/faculty', auth, role('hod'), async (req,res) => {
 
 r.put('/faculty/:id', auth, role('hod'), async (req,res) => {
   try {
+    if (req.body?.designation) {
+      const d = normalizeDesignation(req.body.designation);
+      Object.assign(req.body, { designation: d.designation, priorityTier: d.tier, courseQuota: d.quota, prescribedMin: d.prescribedMin, prescribedMax: d.prescribedMax, minWorkload: d.prescribedMin, maxWorkload: d.prescribedMax });
+    }
     const data = dbReady()
       ? await Faculty.findOneAndUpdate({facultyId:req.params.id}, {$set:req.body}, {new:true, runValidators:true}).lean()
       : Object.assign(memory.faculty.find(x=>x.facultyId===req.params.id)||{}, req.body);
@@ -103,26 +112,11 @@ r.get('/faculty/:id/preferences', auth, async (req,res) => {
 //  - a course the HOD has already approved or rejected is left completely
 //    untouched - editing preferences must never silently reverse or erase a
 //    decision that was already made.
-async function syncAllocationRequestsFromPreferences(facultyId, preferences) {
-  const courseIds = preferences.map(p => p.courseId);
-  const existing = await Allocation.find({ facultyId, courseId: { $in: courseIds } }).lean();
-  const existingCourseIds = new Set(existing.map(e => e.courseId));
-  const toCreate = preferences.filter(p => !existingCourseIds.has(p.courseId));
-  await Promise.all([
-    toCreate.length
-      ? Allocation.insertMany(toCreate.map(p => ({
-          facultyId,
-          courseId: p.courseId,
-          sectionId: '',
-          status: 'pending',
-          recommendationScore: null,
-          recommendationReason: 'Submitted by faculty as a ranked course preference.'
-        })), { ordered: false })
-      : Promise.resolve(),
-    Allocation.deleteMany(
-      { facultyId, status: { $in: ['pending', 'recommended'] }, courseId: { $nin: courseIds } }
-    )
-  ]);
+async function syncAllocationRequestsFromPreferences() {
+  // Requests are no longer created one-by-one from preferences. The automatic
+  // allocator reads Faculty.preferences directly; the HOD re-runs it
+  // (POST /api/allocations/auto-allocate) to apply changed preferences. Approved
+  // decisions are never touched by a re-run.
 }
 
 r.put('/faculty/:id/preferences', auth, async (req,res) => {
@@ -131,7 +125,7 @@ r.put('/faculty/:id/preferences', auth, async (req,res) => {
     const preferences = Array.isArray(req.body?.preferences) ? req.body.preferences.filter(p => p?.courseId && Number(p.rank) > 0).map(p => ({courseId:String(p.courseId),rank:Number(p.rank)})) : null;
     if (!preferences) return res.status(400).json({message:'preferences must be an array of courseId and positive rank values'});
     if (dbReady()) {
-      const faculty = await Faculty.findOneAndUpdate({facultyId:req.params.id},{$set:{preferences}},{new:true}).lean();
+      const faculty = await Faculty.findOneAndUpdate({facultyId:req.params.id},{$set:{preferences, preferenceSource:'submitted', submittedAt:new Date().toLocaleString('en-US')}},{new:true}).lean();
       if (!faculty) return res.status(404).json({message:'Faculty not found'});
       await syncAllocationRequestsFromPreferences(faculty.facultyId, preferences);
       return res.json({facultyId:faculty.facultyId,preferences:faculty.preferences});

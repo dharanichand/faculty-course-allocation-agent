@@ -12,7 +12,13 @@ const schema=new mongoose.Schema({facultyId:{type:String,unique:true},employeeNo
  // scoring/optimizing, per the "subtract administrative responsibilities"
  // step of the allocation workflow.
  adminLoadHours:{type:Number,default:0},
- preferences:[Object],status:{type:String,default:'active'}},{timestamps:true});
+ preferences:[Object],status:{type:String,default:'active'},
+ // ---- fields added for the 2026-27 workload dataset ----
+ // priorityTier: 1 Professor, 2 Associate Professor, 3 Assistant Professor, 4 others.
+ // courseQuota: how many courses the auto-allocator may give this person.
+ // prescribedMin/Max: weekly teaching hours the workload sheet prescribes.
+ // preferenceSource: 'submitted' (from the form) or 'synthetic' (oversampled).
+ mobile:String,designationRaw:String,additionalDuties:String,priorityTier:{type:Number,default:4},courseQuota:{type:Number,default:3},prescribedMin:{type:Number,default:16},prescribedMax:{type:Number,default:18},minWorkload:{type:Number,default:16},previousCourseIds:[String],preferenceSource:{type:String,default:'submitted'},submittedAt:String,inWorkloadSheet:Boolean,inSubmissionsSheet:Boolean},{timestamps:true});
 // Narrows the department/status filter used by every list/dashboard query.
 schema.index({department:1,status:1});
 // Single text index covering the fields keyword search actually matches on.
