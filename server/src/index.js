@@ -18,6 +18,19 @@ try{
   process.exit(1);
 }
 
+// RULE (security): ALLOW_DEMO_LOGIN mints a fully-privileged HOD token to
+// anyone who hits the endpoint, with zero credential check. That is only
+// ever acceptable on a machine the developer controls. Refuse to boot with
+// it (or the demo-account seeding) turned on in production, rather than
+// relying on everyone remembering to unset it on every deploy.
+if(process.env.NODE_ENV==='production' && String(process.env.ALLOW_DEMO_LOGIN).toLowerCase()==='true'){
+  console.error('\nFATAL: ALLOW_DEMO_LOGIN=true in a production environment. This grants unauthenticated HOD access to anyone with the URL. Set it to false (or unset) and redeploy.\n');
+  process.exit(1);
+}
+if(process.env.NODE_ENV==='production' && String(process.env.SEED_DEMO_USERS).toLowerCase()!=='false'){
+  console.warn('\nWARNING: SEED_DEMO_USERS is not explicitly set to false in a production environment. The publicly-known hod@college.edu / faculty@college.edu placeholder accounts will be created with their default passwords. Set SEED_DEMO_USERS=false once real accounts exist.\n');
+}
+
 const app=express();
 app.use(cors());app.use(express.json({limit:'2mb'}));app.use(rateLimit({windowMs:15*60*1000,max:300}));
 

@@ -28,7 +28,7 @@ export default function Login(){
   finally{setBusy('')}
  };
 
- return <div className="h-screen overflow-hidden bg-transparent grid place-items-center p-3 sm:p-5">
+ return <div className="min-h-screen overflow-y-auto bg-transparent grid place-items-center p-3 sm:p-5">
   {/* Banner header, in the style of the reference department event page */}
   <div className="w-full max-w-md">
   <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">

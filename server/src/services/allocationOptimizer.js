@@ -89,7 +89,11 @@ export async function optimizeSemesterAllocation({ academicYear, semester, depar
   async function remainingCapacity(facultyId) {
     if (!facultyCapacity.has(facultyId)) {
       const faculty = await findFaculty(facultyId);
-      const max = Number(faculty?.maxWorkload) || 18;
+      const nominalMax = Number(faculty?.maxWorkload) || 18;
+      // Match calculateRecommendationScore's hard-constraint math: admin
+      // load reduces effective capacity, and anyone on leave has none.
+      const adminLoad = Number(faculty?.adminLoadHours) || 0;
+      const max = faculty?.onLeave ? 0 : Math.max(0, nominalMax - adminLoad);
       const used = Number(faculty?.currentWorkload) || 0;
       facultyCapacity.set(facultyId, Math.max(0, max - used));
     }

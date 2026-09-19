@@ -84,7 +84,15 @@ async function notifyReassignment(courseId,sectionId,previousFacultyId,newFacult
  }catch(e){console.error('Reassignment email failed:',e.message);}
 }
 
-r.get('/',auth,async(req,res)=>{try{res.json(await pendingAllocations())}catch(e){res.status(500).json({message:e.message})}});
+r.get('/',auth,async(req,res)=>{try{
+  const rows=await pendingAllocations();
+  // Attach facultyName so the HOD Review screen can show "Name (ID)".
+  // Looks up all faculty (including inactive) so a name is never missing.
+  const ids=[...new Set(rows.map(x=>x.facultyId).filter(Boolean))];
+  const profiles=ids.length?await Faculty.find({facultyId:{$in:ids}}).select('facultyId name').lean():[];
+  const names=new Map(profiles.map(f=>[f.facultyId,f.name]));
+  res.json(rows.map(x=>({...x,facultyName:names.get(x.facultyId)||x.facultyName||''})));
+ }catch(e){res.status(500).json({message:e.message})}});
 
 r.get('/my',auth,async(req,res)=>{
  try{

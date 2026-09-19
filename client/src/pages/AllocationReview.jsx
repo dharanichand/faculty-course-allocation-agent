@@ -28,7 +28,8 @@ export default function AllocationReview(){
  useEffect(()=>{load()},[]);
 
  const current=items[selected];
- const name=(id)=>faculty.find(f=>f.facultyId===id)?.name||id;
+ const name=(id)=>faculty.find(f=>f.facultyId===id)?.name||(current&&current.facultyId===id?current.facultyName:'')||id;
+ const label=(id)=>{const n=name(id);return n&&n!==id?`${n} (${id})`:String(id||'')};
  const courseName=current?(current.courseName||courses.find(c=>c.courseId===current.courseId)?.courseName||current.courseId):'';
 
  const removeCurrentAndAdvance=(remaining)=>{
@@ -113,15 +114,15 @@ export default function AllocationReview(){
       </label>
       <div className="text-xs font-bold text-fuchsia-700">{courseName} • {current.sectionId||'SECTION A'}</div>
       <h2 className="font-display text-xl font-semibold mt-1 text-slate-800">Allocation candidate</h2>
-      <p className="text-sm text-slate-500 mt-1">Faculty request from {name(current.facultyId)} • Preference #{current.preferenceRank||1}</p>
+      <p className="text-sm text-slate-500 mt-1">Faculty request from {label(current.facultyId)} • Preference #{current.preferenceRank||1}</p>
      </div>
     <div className="flex items-center gap-2"><span className="text-xs text-slate-500">Review {selected+1} of {items.length}</span><Badge tone="red">Pending review</Badge><AskAgentButton prompt={`What happens if I assign ${name(current.facultyId)} (${current.facultyId}) to ${courseName} (${current.courseId})? Check workload and conflicts before I decide.`} label="Ask agent"/></div>
     </div>
    </div>
    <div className="p-5">
-    <div className="flex items-center gap-2 text-sm font-bold mb-4 text-slate-700"><Sparkles size={17} className="text-fuchsia-700"/> AI recommendation: <span className="text-fuchsia-700">{name(current.facultyId)}</span></div>
+    <div className="flex items-center gap-2 text-sm font-bold mb-4 text-slate-700"><Sparkles size={17} className="text-fuchsia-700"/> AI recommendation: <span className="text-fuchsia-700">{label(current.facultyId)}</span></div>
     <div className="p-5 rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/5">
-    <div className="flex justify-between"><div><div className="font-semibold text-slate-800">{name(current.facultyId)}</div><div className="text-xs text-slate-500 mt-1">Faculty ID: {current.facultyId}</div></div><div className="text-right"><div className="font-display text-2xl font-bold text-slate-900">{current.recommendationScore??'—'}<span className="text-xs font-semibold text-slate-500">/100</span></div><Badge tone="green">Recommended</Badge></div></div>
+    <div className="flex justify-between"><div><div className="font-semibold text-slate-800">{name(current.facultyId)} <span className="text-slate-500 font-medium">({current.facultyId})</span></div><div className="text-xs text-slate-500 mt-1">Faculty ID: {current.facultyId}</div></div><div className="text-right"><div className="font-display text-2xl font-bold text-slate-900">{current.recommendationScore??'—'}<span className="text-xs font-semibold text-slate-500">/100</span></div><Badge tone="green">Recommended</Badge></div></div>
      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-5 text-xs">
       <div className="p-2.5 bg-slate-50 rounded-lg"><GraduationCap size={14} className="text-cyan-700 mb-1"/><span className="text-slate-500">Qualification</span><b className="block text-slate-700">Verified</b></div>
       <div className="p-2.5 bg-slate-50 rounded-lg"><Scale size={14} className="text-cyan-700 mb-1"/><span className="text-slate-500">Expertise</span><b className="block text-slate-700">Verified</b></div>
@@ -135,7 +136,7 @@ export default function AllocationReview(){
      <button disabled={busy} onClick={()=>decide('reject')} className="btn-outline px-5 py-2.5 rounded-xl font-semibold text-sm flex gap-2 items-center disabled:opacity-50"><X size={17}/> Reject</button>
      <button disabled={busy} onClick={()=>setOverride(true)} className="px-5 py-2.5 rounded-xl border border-cyan-400/30 text-cyan-700 hover:bg-cyan-400/10 font-semibold text-sm flex gap-2 items-center disabled:opacity-50 transition"><RotateCcw size={17}/> Override</button>
     </div>
-    {override&&<div className="mt-4 p-4 border border-amber-400/25 bg-amber-400/5 rounded-xl"><div className="font-semibold text-sm text-slate-800">Override allocation</div><div className="grid md:grid-cols-2 gap-3 mt-3"><select value={overrideFaculty} onChange={e=>setOverrideFaculty(e.target.value)} className="field-input px-3 py-2.5 rounded-lg">{faculty.map(f=><option key={f.facultyId} value={f.facultyId}>{f.name}</option>)}</select><input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Reason for override" className="field-input px-3 py-2.5 rounded-lg"/></div><button disabled={busy} onClick={saveOverride} className="mt-3 px-4 py-2 rounded-lg btn-primary text-sm disabled:opacity-50">Save override & audit</button></div>}
+    {override&&<div className="mt-4 p-4 border border-amber-400/25 bg-amber-400/5 rounded-xl"><div className="font-semibold text-sm text-slate-800">Override allocation</div><div className="grid md:grid-cols-2 gap-3 mt-3"><select value={overrideFaculty} onChange={e=>setOverrideFaculty(e.target.value)} className="field-input px-3 py-2.5 rounded-lg">{faculty.map(f=><option key={f.facultyId} value={f.facultyId}>{f.name} ({f.facultyId})</option>)}</select><input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Reason for override" className="field-input px-3 py-2.5 rounded-lg"/></div><button disabled={busy} onClick={saveOverride} className="mt-3 px-4 py-2 rounded-lg btn-primary text-sm disabled:opacity-50">Save override & audit</button></div>}
    </div>
   </Card>
 
