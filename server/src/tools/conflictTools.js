@@ -1,6 +1,6 @@
-import {getFacultyProfile,getFacultyAvailability} from './facultyTools.js';import {getCourseDetails,getCourseRequests} from './courseTools.js';
+import {getFacultyProfile,isFacultyAvailable} from './facultyTools.js';import {getCourseDetails,getCourseRequests} from './courseTools.js';
 export const checkQualification=async(facultyId,courseId)=>{const f=await getFacultyProfile(facultyId);const c=await getCourseDetails(courseId);const req=c?.requiredQualification||[];return {valid:req.length===0||req.some(x=>(f?.qualifications||[]).some(q=>q.toLowerCase().includes(x.toLowerCase()))),required:req,actual:f?.qualifications||[]}};
 export const checkExpertiseMatch=async(facultyId,courseId)=>{const f=await getFacultyProfile(facultyId);const c=await getCourseDetails(courseId);const req=c?.requiredExpertise||[];const exp=f?.expertise||[];const matches=req.filter(x=>exp.some(e=>e.toLowerCase().includes(x.toLowerCase()))).length;return {percent:req.length?Math.round(matches/req.length*100):100,matches}};
-export const checkAvailability=async(facultyId,courseId)=>({available:(await getFacultyAvailability(facultyId)).length>0||true});
+export const checkAvailability=async(facultyId,courseId)=>isFacultyAvailable(facultyId);
 export const detectCourseConflicts=async courseId=>{const req=await getCourseRequests(courseId);return {multipleRequests:req.length>1,count:req.length,requests:req}};
 export const detectFacultyConflicts=async facultyId=>({facultyId});

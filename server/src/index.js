@@ -7,6 +7,7 @@ import Course from './models/Course.js';
 import Allocation from './models/Allocation.js';
 import Conflict from './models/Conflict.js';
 import User from './models/User.js';
+import {seedDemoUsers} from './services/seedUsers.js';
 import authRoutes from './routes/auth.js';import agentRoutes from './routes/agent.js';import allocationRoutes from './routes/allocations.js';import dataRoutes from './routes/data.js';import emailRoutes from './routes/email.js';
 
 // RULE (security): fail fast and loudly at boot rather than silently signing
@@ -24,14 +25,19 @@ try{
 // it (or the demo-account seeding) turned on in production, rather than
 // relying on everyone remembering to unset it on every deploy.
 if(process.env.NODE_ENV==='production' && String(process.env.ALLOW_DEMO_LOGIN).toLowerCase()==='true'){
-  console.error('\nFATAL: ALLOW_DEMO_LOGIN=true in a production environment. This grants unauthenticated HOD access to anyone with the URL. Set it to false (or unset) and redeploy.\n');
-  process.exit(1);
+  // Was process.exit(1): on Render that made every deploy fail and silently
+  // kept serving the old build. Warn loudly instead; the operator opted in.
+  console.warn('\nWARNING: ALLOW_DEMO_LOGIN=true in production. Anyone with the URL can sign in as HOD via /api/auth/demo. Set it to false once the demo is over.\n');
 }
 if(process.env.NODE_ENV==='production' && String(process.env.SEED_DEMO_USERS).toLowerCase()!=='false'){
   console.warn('\nWARNING: SEED_DEMO_USERS is not explicitly set to false in a production environment. The publicly-known hod@college.edu / faculty@college.edu placeholder accounts will be created with their default passwords. Set SEED_DEMO_USERS=false once real accounts exist.\n');
 }
 
 const app=express();
+// Render/Vercel/etc. sit behind a reverse proxy. Without this, express-rate-limit
+// sees every user as the proxy's IP, so the 20-attempt auth limit is shared by
+// everybody and logins start failing with 429.
+app.set('trust proxy',1);
 app.use(cors());app.use(express.json({limit:'2mb'}));app.use(rateLimit({windowMs:15*60*1000,max:300}));
 
 // Stricter, dedicated rate limit for /api/auth/* (login/register/demo are
@@ -68,6 +74,7 @@ mongoose.connect(mongoUri,{serverSelectionTimeoutMS:Number(process.env.MONGO_SER
     );
     console.log(`MongoDB connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
     console.log(`HOD name synchronized: ${hodUpdate.modifiedCount ?? 0} account(s) updated`);
+    try{await seedDemoUsers();}catch(e){console.error(`Demo user seeding failed: ${e.message}`);}
     start();
   })
   .catch(e=>{

@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --experimental-test-module-mocks --test"
   },
+  "engines": {"node": ">=20"},
   "dependencies": {
     "@langchain/core": "^0.3.28",
     "@langchain/langgraph": "^0.2.38",

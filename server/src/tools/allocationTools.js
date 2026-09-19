@@ -39,6 +39,7 @@ export function computeScore(faculty, course, history, historyCourses, config){
  // A faculty member on leave/sabbatical is a hard exclusion, not a scoring
  // penalty - they should never be proposed for a *new* allocation this
  // term, however good the expertise match looks on paper.
+ if(f.status==='inactive')hardViolations.push('faculty account is inactive');
  if(f.onLeave)hardViolations.push(f.leaveReason?`faculty is on leave (${f.leaveReason})`:'faculty is on leave/sabbatical this term');
  return {facultyId,courseId,score:expertise+publication+qualification+preference+continuity+feedback,breakdown:{expertise,publication,qualification,preference,continuity,feedback},hardViolations,verified:{faculty:f.name,course:c.courseName,expertisePercent,publicationPercent,preferenceRank:rank,continuity:{taughtExact,taughtPrior,sequence:currentSequence?.base||null},workload:{current,added,nominalMax,adminLoad,max,available:Math.max(0,max-current)},onLeave:!!f.onLeave,matchedExpertise:matched,matchedPublications,qualifications:f.qualifications||[]}};
 }

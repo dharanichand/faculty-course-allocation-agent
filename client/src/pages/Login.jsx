@@ -3,6 +3,13 @@ import axios from 'axios';
 import {Bot,LockKeyhole,Mail,ArrowRight,ShieldCheck,Sparkles,GraduationCap,UserRound,Landmark} from 'lucide-react';
 const API=import.meta.env.VITE_API_URL||'http://localhost:5000/api';
 
+function authError(e,fallback){
+ if(!e?.response)return `Cannot reach the server at ${API}. Make sure the backend is running (locally: npm run dev:server) and VITE_API_URL is correct.`;
+ if(e.response.status===429)return 'Too many attempts. Please wait a few minutes and try again.';
+ if(e.response.status===400)return e.response.data?.issues?.[0]?.message||e.response.data?.message||fallback;
+ return e.response.data?.message||fallback;
+}
+
 export default function Login(){
  const [email,setEmail]=useState('hod@college.edu'); const [password,setPassword]=useState('hod12345');
  const [role,setRole]=useState('hod');
@@ -14,17 +21,17 @@ export default function Login(){
  const login=async()=>{
   if(!email||!password) return setError('Enter your email and password, or use the demo option below.');
   try{setBusy('login');setError('');
-    const d=await axios.post(`${API}/auth/login`,{email,password,role});
+    const d=await axios.post(`${API}/auth/login`,{email:email.trim(),password,role},{timeout:30000});
    enter(d.data.token,d.data.user);
-  }catch(e){setError(e?.response?.data?.message||'Could not sign in. Check your credentials or use the demo option.')}
+  }catch(e){setError(authError(e,'Could not sign in. Check your credentials.'))}
   finally{setBusy('')}
  };
 
  const demo=async()=>{
   try{setBusy('demo');setError('');
-   const d=await axios.post(`${API}/auth/demo`);
+   const d=await axios.post(`${API}/auth/demo`,{},{timeout:30000});
    enter(d.data.token,d.data.user);
-  }catch(e){setError(e?.response?.data?.message||'Could not start the demo. Please make sure the server is running.')}
+  }catch(e){setError(e?.response?.status===404?'Demo login is disabled on this server. Sign in with your email and password.':authError(e,'Could not start the demo.'))}
   finally{setBusy('')}
  };
 
