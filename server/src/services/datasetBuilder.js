@@ -1,17 +1,19 @@
 // ============================================================================
 // DATASET BUILDER
 //
-// Turns the two spreadsheets the department actually maintains into the
-// records the application stores in MongoDB:
-//   1. Workload_AY_2026-27_I_Sem.xlsx  -> courses (+ section counts, hours) and
-//                                         the faculty who carry a workload
+// Turns the three spreadsheet inputs the department actually maintains into
+// the records the application stores in MongoDB:
+//   1. Workload_AY_2026-27_I_Sem.xlsx  -> courses (+ section counts, hours),
+//      the faculty who carry a workload, and the department's own official
+//      Lead Faculty sheet (who is meant to coordinate each course)
 //   2. submissions_YYYY-MM-DD.xlsx     -> ranked course preferences
 //
 // Rules implemented here (all in one place so they are easy to change):
 //   * The faculty roster is the UNION of both files, so nobody is dropped.
-//   * Every faculty member ends up with 5 ranked preferences. Faculty who did
-//     not submit any get SYNTHETIC preferences (see synthesizePreferences).
-//   * Designation decides priority tier, course quota and prescribed hours.
+//   * Faculty who did not submit the preference form fall back to exactly
+//     what the Workload sheet shows them teaching - never a guess.
+//   * Designation decides priority tier, course quota and prescribed hours
+//     (using each person's own stated hours from the sheet when present).
 //
 // Pure functions only (no database access) so it can be unit-tested.
 // ============================================================================
@@ -26,6 +28,25 @@ export {TIER_LABELS, QUOTA_BY_TIER, HOURS_BY_TIER, normalizeDesignation};
 const clean = v => String(v ?? '').replace(/\s+/g, ' ').trim();
 const normName = v => clean(v).toLowerCase().replace(/&/g, ' and ').replace(/visualisation/g, 'visualization').replace(/[^a-z0-9]+/g, '');
 const personKey = v => clean(v).toLowerCase().replace(/\b(dr|mr|mrs|ms|prof|miss)\b\.?/g, '').replace(/[^a-z]+/g, '');
+// Order-insensitive, abbreviation-tolerant name matcher for the Lead Faculty
+// sheet, where names are sometimes given as "T. Phanindra" for someone whose
+// full name is "Phanindra Thota" elsewhere. Every token on each side must
+// correspond to a token on the other side (exact, or one is a short initial
+// prefix of the other) - this only fires when both names really do reduce to
+// the same set of tokens, so it won't cross-match two different people.
+const nameTokens = v => clean(v).toLowerCase().replace(/\b(dr|mr|mrs|ms|prof|miss)\b\.?/g, '').replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+export function namesLikelyMatch(a, b) {
+  const at = nameTokens(a), bt = nameTokens(b);
+  if (!at.length || !bt.length || at.length !== bt.length) return false;
+  const tokenMatch = (x, y) => x === y || (x.length <= 3 && y.startsWith(x)) || (y.length <= 3 && x.startsWith(y));
+  const usedB = new Set();
+  for (const x of at) {
+    const i = bt.findIndex((y, idx) => !usedB.has(idx) && tokenMatch(x, y));
+    if (i === -1) return false;
+    usedB.add(i);
+  }
+  return true;
+}
 const romanOf = v => {
   const s = clean(v).toUpperCase();
   if (['I', 'II', 'III', 'IV'].includes(s)) return s;
@@ -168,7 +189,75 @@ export function parseCourses(workbook, {academicYear = '2026-27', semester = 'I'
       status: 'open'
     });
   }
-  return courses;
+  // Scope the site to real CSE subjects only, i.e. the ones the CSE
+  // department's own Faculty WL sheet actually staffs. The catalog also
+  // lists a handful of M.Tech electives that have no CSE faculty attached
+  // anywhere in Faculty WL (the one that does is taught by the Dean of a
+  // different school, SOCI, not CSE) - those are excluded here.
+  return courses.filter(c => c.program === 'B. Tech.');
+}
+
+// ---------------------------------------------------------------------------
+// 1b. The department's own "Lead Faculty" sheet - who is meant to coordinate
+// each course. Course titles here carry a "(N Sections)" suffix and use a
+// different provisional code scheme than the other sheets, so matching is by
+// (year, normalized title) only. '***' / blank means "not decided yet".
+// ---------------------------------------------------------------------------
+export function parseLeadFacultySheet(workbook) {
+  const rows = rowsOf(workbook, 'Lead Faculty');
+  const headerIdx = rows.findIndex(r => clean(r[0]) === 'Year' && clean(r[3]).toLowerCase().includes('lead'));
+  if (headerIdx < 0) return [];
+  const out = [];
+  for (const r of rows.slice(headerIdx + 1)) {
+    const year = romanOf(r[0]);
+    const titleRaw = clean(r[2]);
+    if (!year || !titleRaw) continue;
+    const title = titleRaw.replace(/\s*\(\s*\d+\s*sections?\s*\)\s*$/i, '').trim();
+    if (!title) continue;
+    const leadRaw = clean(r[3]);
+    out.push({year, courseName: title, leadFacultyRaw: (leadRaw && leadRaw !== '***') ? leadRaw : null});
+  }
+  return out;
+}
+
+// Resolve the sheet's plain-text lead-faculty name to an actual facultyId in
+// the merged roster. Exact name match first; falls back to the order/
+// abbreviation-tolerant matcher above for names given in a shortened form.
+export function resolveLeadFaculty(rawName, facultyPeople) {
+  if (!rawName) return null;
+  const exact = facultyPeople.find(p => personKey(p.name) === personKey(rawName));
+  if (exact) return exact;
+  const loose = facultyPeople.filter(p => namesLikelyMatch(p.name, rawName));
+  // Prefer whoever is a real, currently-employed Workload-sheet person over a
+  // submissions-only entry if more than one name happens to match.
+  if (loose.length > 1) loose.sort((a, b) => (b.inWorkloadSheet ? 1 : 0) - (a.inWorkloadSheet ? 1 : 0));
+  return loose[0] || null;
+}
+
+// The "Prescribed workload (h/week)" column (index 5) sometimes comes through
+// as the department's own text ("16-18", or a single number like "12"), but
+// Excel silently auto-formats small "M-D"-looking ranges (e.g. "6-8", "12-14")
+// as dates. SheetJS then hands that back as a raw date serial number. Both
+// forms are decoded here into a real {min,max} - the department's own stated
+// number for that specific person, not a guess.
+function excelSerialToRange(serial) {
+  const utcDays = Math.floor(serial - 25569);
+  const date = new Date(utcDays * 86400 * 1000);
+  return {min: date.getUTCMonth() + 1, max: date.getUTCDate()};
+}
+export function parsePrescribedWorkload(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'number') {
+    // A plausible Excel date serial (Excel auto-formatted "M-D" as a date).
+    if (raw > 20000 && raw < 60000) return excelSerialToRange(raw);
+    return {min: raw, max: raw};
+  }
+  const s = clean(raw);
+  const range = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
+  if (range) return {min: Number(range[1]), max: Number(range[2])};
+  const n = Number(s);
+  if (Number.isFinite(n)) return {min: n, max: n};
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +271,8 @@ export function parseWorkloadSheet(workbook) {
     if (Number.isFinite(Number(r[0])) && r[0] !== null && clean(r[2])) {
       cur = {
         slNo: Number(r[0]), rawId: String(r[1]).trim(), name: clean(r[2]),
-        designationRaw: clean(r[3]), additionalDuties: clean(r[4]), courseRows: []
+        designationRaw: clean(r[3]), additionalDuties: clean(r[4]),
+        prescribed: parsePrescribedWorkload(r[5]), courseRows: []
       };
       faculty.push(cur);
     }
@@ -215,76 +305,14 @@ export function parseSubmissions(workbook) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Synthetic preferences  (oversampling for faculty who submitted nothing)
+// 4. Preferences for faculty who never submitted the form
 //
-// Approach: class-conditional smoothed bootstrap.
-//   * Learn from real submissions: how popular each course is (per designation
-//     group when there is enough data, otherwise across everyone), and how
-//     often a faculty member's preferences include something they already
-//     teach (measured on faculty present in both files).
-//   * For each faculty member with no submission, resample 5 unique courses
-//     from that empirical distribution (Laplace smoothing, so unseen courses
-//     keep a small non-zero chance), biasing towards courses they already
-//     teach with the measured probability.
-// The output looks like the real data statistically, is reproducible (seeded by
-// employee number) and is always flagged preferenceSource = 'synthetic'.
+// No guessing, no random sampling. If a faculty member is in the Workload
+// sheet but did not submit ranked preferences, the ONLY thing we know for a
+// fact about what they should teach is what the Workload sheet already shows
+// them assigned to (see the faculty-building loop in buildDataset below,
+// which uses p.taughtCourseIds directly). Nothing is invented.
 // ---------------------------------------------------------------------------
-export function synthesizePreferences({targets, real, itemsByKey, allItemKeys, taughtKeysOf, stats, alpha = 0.5}) {
-  const rankCount = 5;
-  const pooled = new Map();
-  const byTier = new Map();
-  for (const p of real) {
-    for (const k of p.itemKeys) {
-      pooled.set(k, (pooled.get(k) || 0) + 1);
-      if (!byTier.has(p.tier)) byTier.set(p.tier, new Map());
-      const m = byTier.get(p.tier); m.set(k, (m.get(k) || 0) + 1);
-    }
-  }
-  const tierSize = t => real.filter(p => p.tier === t).length;
-  const weightsFor = tier => {
-    const useTier = tierSize(tier) >= 10;
-    const src = useTier ? byTier.get(tier) : pooled;
-    return new Map(allItemKeys.map(k => [k, (src.get(k) || 0) + alpha]));
-  };
-
-  const draw = (rand, weights, exclude) => {
-    let total = 0;
-    for (const [k, w] of weights) if (!exclude.has(k)) total += w;
-    let x = rand() * total;
-    for (const [k, w] of weights) {
-      if (exclude.has(k)) continue;
-      x -= w;
-      if (x <= 0) return k;
-    }
-    return [...weights.keys()].find(k => !exclude.has(k));
-  };
-
-  const result = new Map();
-  for (const t of targets) {
-    const rand = mulberry32(Number(t.seed) || 1);
-    const weights = weightsFor(t.tier);
-    const taught = taughtKeysOf(t).filter(k => itemsByKey.has(k));
-    const picked = [];
-    const used = new Set();
-
-    // Include something they already teach with the empirically observed rate.
-    if (taught.length && rand() < stats.pTaughtAny) {
-      const first = draw(rand, new Map(taught.map(k => [k, weights.get(k) ?? alpha])), used);
-      const atRankOne = rand() < (stats.pTaughtFirst / Math.max(stats.pTaughtAny, 0.0001));
-      const pos = atRankOne ? 0 : 1 + Math.floor(rand() * (rankCount - 1));
-      picked[pos] = first;
-      used.add(first);
-    }
-    for (let i = 0; i < rankCount; i++) {
-      if (picked[i]) continue;
-      const k = draw(rand, weights, used);
-      picked[i] = k;
-      used.add(k);
-    }
-    result.set(t.key, picked.filter(Boolean).slice(0, rankCount));
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // 5. Put everything together
@@ -347,6 +375,7 @@ export function buildDataset({workloadPath, submissionsPath, academicYear = '202
 
   // ---- Merge the two files by employee number (union roster) ----
   const people = new Map();
+  const byPersonKey = new Map(); // personKey(name) -> workload person, for ID-mismatch recovery below
   for (const f of wl) {
     const id = padId(f.rawId);
     const taughtIds = new Set();
@@ -355,74 +384,65 @@ export function buildDataset({workloadPath, submissionsPath, academicYear = '202
         || (coursesByName.get(normName(cr.name)) || []).find(x => x.program === cr.program);
       if (c) taughtIds.add(c.courseId);
     }
-    people.set(id, {
+    const person = {
       id, name: f.name, designationRaw: f.designationRaw, additionalDuties: f.additionalDuties,
-      taughtCourseIds: [...taughtIds], inWorkload: true, submission: null
-    });
+      prescribed: f.prescribed, taughtCourseIds: [...taughtIds], inWorkload: true, submission: null
+    };
+    people.set(id, person);
+    byPersonKey.set(personKey(f.name), person);
   }
+  // Faculty who submitted the preference form using an employee number that
+  // doesn't match their real Workload-sheet ID (a typo, or their admission /
+  // temp ID instead of their employee ID) would otherwise become a phantom
+  // duplicate person - a fake profile that can never be assigned any course,
+  // while their real profile is wrongly treated as "never submitted". Match
+  // by name first so their real submitted preferences reach their real
+  // record; only create a new person when no real workload record exists.
+  const submissionIdFixes = [];
   for (const s of submissions) {
     const id = padId(s.rawId);
-    const p = people.get(id);
+    let p = people.get(id);
+    if (!p) {
+      const byName = byPersonKey.get(personKey(s.name));
+      if (byName && !byName.submission) {
+        p = byName;
+        submissionIdFixes.push({name: s.name, submittedAs: id, realId: byName.id});
+      }
+    }
     if (p) p.submission = s;
-    else people.set(id, {id, name: s.name, designationRaw: s.designationRaw, additionalDuties: '', taughtCourseIds: [], inWorkload: false, submission: s});
+    else { people.set(id, {id, name: s.name, designationRaw: s.designationRaw, additionalDuties: '', taughtCourseIds: [], inWorkload: false, submission: s}); byPersonKey.set(personKey(s.name), people.get(id)); }
   }
-
-  // ---- Learn the preference behaviour from the real submissions ----
-  const real = [];
-  let overlap = 0, anyHit = 0, firstHit = 0;
-  for (const p of people.values()) {
-    if (!p.submission) continue;
-    const itemKeys = [];
-    for (const t of p.submission.tokens) {
-      const it = tokenItem(t);
-      if (it && !itemKeys.includes(it.key)) itemKeys.push(it.key);
-    }
-    const tier = normalizeDesignation(p.inWorkload ? p.designationRaw : p.submission.designationRaw).tier;
-    real.push({id: p.id, tier, itemKeys});
-    if (p.inWorkload && p.taughtCourseIds.length) {
-      const taughtKeys = new Set(p.taughtCourseIds.map(id => itemForCourseId.get(id)));
-      overlap++;
-      if (itemKeys.some(k => taughtKeys.has(k))) anyHit++;
-      if (itemKeys.length && taughtKeys.has(itemKeys[0])) firstHit++;
-    }
-  }
-  const stats = {
-    pTaughtAny: overlap ? anyHit / overlap : 0.8,
-    pTaughtFirst: overlap ? firstHit / overlap : 0.45,
-    submittedCount: real.length, overlapCount: overlap
-  };
-
-  const missing = [...people.values()].filter(p => !p.submission || !p.submission.tokens.some(t => tokenItem(t)));
-  const synthetic = synthesizePreferences({
-    targets: missing.map(p => ({
-      key: p.id, seed: parseInt(p.id, 10),
-      tier: normalizeDesignation(p.designationRaw).tier, taught: p.taughtCourseIds
-    })),
-    real, itemsByKey, allItemKeys: [...itemsByKey.keys()].filter(k => k.startsWith('tok:')),
-    taughtKeysOf: t => [...new Set(t.taught.map(id => itemForCourseId.get(id)).filter(Boolean))],
-    stats
-  });
 
   // ---- Final faculty records ----
   const faculty = [];
   for (const p of people.values()) {
-    const d = normalizeDesignation(p.designationRaw);
-    let itemKeys, source;
+    const d = normalizeDesignation(p.designationRaw, p.prescribed);
+    let preferences, source;
     if (p.submission && p.submission.tokens.some(t => tokenItem(t))) {
-      itemKeys = []; source = 'submitted';
+      // Submitted form: a token like "Ethics" is genuinely ambiguous between
+      // years, so every course under that token becomes a ranked preference -
+      // this reflects what the person actually wrote on the form.
+      source = 'submitted';
+      const itemKeys = [];
       for (const t of p.submission.tokens) {
         const it = tokenItem(t);
         if (it && !itemKeys.includes(it.key)) itemKeys.push(it.key);
       }
+      preferences = [];
+      itemKeys.forEach((k, idx) => {
+        for (const courseId of itemsByKey.get(k).courseIds) {
+          if (!preferences.some(x => x.courseId === courseId)) preferences.push({courseId, rank: idx + 1});
+        }
+      });
     } else {
-      itemKeys = synthetic.get(p.id) || []; source = 'synthetic';
+      // No submission: use EXACTLY the course(s) the Workload sheet shows this
+      // person teaching - never expand through the token grouping, since that
+      // would pull in a same-named course from a different year they don't
+      // actually teach.
+      const taught = [...new Set(p.taughtCourseIds)];
+      source = taught.length ? 'workload' : 'none';
+      preferences = taught.map((courseId, idx) => ({courseId, rank: idx + 1}));
     }
-    const preferences = [];
-    itemKeys.forEach((k, idx) => {
-      for (const courseId of itemsByKey.get(k).courseIds) {
-        if (!preferences.some(x => x.courseId === courseId)) preferences.push({courseId, rank: idx + 1});
-      }
-    });
     const courseName = id => courses.find(c => c.courseId === id)?.courseName;
     const expertise = [...new Set([...p.taughtCourseIds, ...preferences.map(x => x.courseId)].map(courseName).filter(Boolean))];
     faculty.push({
@@ -442,6 +462,21 @@ export function buildDataset({workloadPath, submissionsPath, academicYear = '202
   }
   faculty.sort((a, b) => a.facultyId.localeCompare(b.facultyId));
 
+  // ---- Attach the department's official Lead Faculty (course coordinator)
+  // to each course, where it can be confidently resolved to a real person ----
+  const leadRows = parseLeadFacultySheet(wlBook);
+  const leadByKey = new Map(leadRows.map(l => [`${l.year}|${normName(l.courseName)}`, l]));
+  const leadFacultyFixes = [];
+  for (const c of courses) {
+    const lead = leadByKey.get(`${c.year}|${normName(c.courseName)}`);
+    if (!lead || !lead.leadFacultyRaw) continue;
+    const person = resolveLeadFaculty(lead.leadFacultyRaw, faculty);
+    c.officialLeadFacultyName = lead.leadFacultyRaw;
+    c.officialLeadFacultyId = person ? person.facultyId : null;
+    if (!person) leadFacultyFixes.push({course: c.courseName, leadFacultyRaw: lead.leadFacultyRaw, resolved: false});
+    else if (personKey(person.name) !== personKey(lead.leadFacultyRaw)) leadFacultyFixes.push({course: c.courseName, leadFacultyRaw: lead.leadFacultyRaw, resolved: true, matchedName: person.name, facultyId: person.facultyId});
+  }
+
   const summary = {
     faculty: faculty.length,
     courses: courses.length,
@@ -452,9 +487,10 @@ export function buildDataset({workloadPath, submissionsPath, academicYear = '202
     workloadOnly: faculty.filter(f => f.inWorkloadSheet && !f.inSubmissionsSheet).length,
     submissionsOnly: faculty.filter(f => !f.inWorkloadSheet && f.inSubmissionsSheet).length,
     submittedPreferences: faculty.filter(f => f.preferenceSource === 'submitted').length,
-    syntheticPreferences: faculty.filter(f => f.preferenceSource === 'synthetic').length,
+    workloadAssignedPreferences: faculty.filter(f => f.preferenceSource === 'workload').length,
+    noPreferenceData: faculty.filter(f => f.preferenceSource === 'none').length,
     byDesignation: faculty.reduce((m, f) => (m[f.designation] = (m[f.designation] || 0) + 1, m), {}),
-    idFixes, preferenceStats: stats
+    idFixes, submissionIdFixes, leadFacultyFixes
   };
   return {faculty, courses, summary};
 }

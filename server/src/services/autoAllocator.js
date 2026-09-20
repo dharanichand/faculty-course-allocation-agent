@@ -25,8 +25,12 @@
 
 import {TIER_LABELS} from './designationPolicy.js';
 export {TIER_LABELS};
-const DEFAULT_QUOTA = {1: 1, 2: 2, 3: 3, 4: 3};
+const DEFAULT_QUOTA = {1: 1, 2: 2, 3: 3, 4: 3, 5: 2};
 const PREF_SCORE = [60, 50, 40, 30, 20];
+// Every priority tier that exists in the designation policy - built from
+// TIER_LABELS so a newly-added tier (e.g. the CAP-derived tier 5) is
+// automatically included here instead of silently skipped.
+const ALL_TIERS = Object.keys(TIER_LABELS).map(Number).sort((a, b) => a - b);
 
 const submittedMs = f => {
   const t = Date.parse(f.submittedAt || '');
@@ -136,7 +140,7 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
   // ---- 1. preference phase: strictly by priority tier ----
   const denials = new Map();             // courseId -> Map(facultyId -> best rank they wanted)
   const maxQuota = Math.max(0, ...states.map(s => s.quota));
-  for (const tier of [1, 2, 3, 4]) {
+  for (const tier of ALL_TIERS) {
     const group = states.filter(s => s.tier === tier);
     for (let round = 0; round < maxQuota; round++) {
       for (const st of group) {
@@ -198,7 +202,7 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
     return score;
   };
 
-  for (const tier of [1, 2, 3, 4]) {
+  for (const tier of ALL_TIERS) {
     const group = states.filter(s => s.tier === tier);
     for (let round = 0; round < maxQuota; round++) {
       for (const st of group) {
@@ -319,8 +323,8 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
     const n = leadsFree.get(c.courseId) || 0;
     if (n > 0) uncovered.push({courseId: c.courseId, courseName: c.courseName, sectionsWithoutInstructor: n});
   }
-  const counts = {professor: 0, associate: 0, assistant: 0, other: 0};
-  facultySummary.forEach(f => { counts[['professor', 'associate', 'assistant', 'other'][f.tier - 1]]++; });
+  const counts = {professor: 0, associate: 0, assistant: 0, other: 0, contractLimited: 0};
+  facultySummary.forEach(f => { counts[['professor', 'associate', 'assistant', 'other', 'contractLimited'][f.tier - 1]]++; });
   const stats = {
     faculty: states.length,
     assignments: assignments.length,

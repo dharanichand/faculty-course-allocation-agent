@@ -16,8 +16,7 @@ test('faculty roster is the union of both files - nobody is dropped', () => {
   const {summary, faculty} = data;
   assert.equal(faculty.length, summary.inBothFiles + summary.workloadOnly + summary.submissionsOnly);
   assert.equal(new Set(faculty.map(f => f.facultyId)).size, faculty.length, 'faculty ids are unique');
-  assert.equal(summary.submittedPreferences + summary.syntheticPreferences, faculty.length);
-  assert.ok(summary.syntheticPreferences > 0);
+  assert.equal(summary.submittedPreferences + summary.workloadAssignedPreferences + summary.noPreferenceData, faculty.length);
 });
 
 test('a duplicated employee number in the workload sheet is repaired (Shareefunnisa -> 01238)', () => {
@@ -27,16 +26,24 @@ test('a duplicated employee number in the workload sheet is repaired (Shareefunn
   assert.ok(b);
 });
 
-test('every faculty member has 5 ranked, distinct preference groups (submitted or synthetic)', () => {
+test('every faculty member has distinct preference courseIds, and a valid preference source', () => {
   for (const f of data.faculty) {
-    const ranks = new Set(f.preferences.map(p => p.rank));
-    assert.ok(ranks.size >= 3 && ranks.size <= 5, `${f.facultyId} has ${ranks.size} ranks`);
     assert.equal(new Set(f.preferences.map(p => p.courseId)).size, f.preferences.length);
-    assert.ok(['submitted', 'synthetic'].includes(f.preferenceSource));
+    assert.ok(['submitted', 'workload', 'none'].includes(f.preferenceSource));
+    // Submitted preferences come straight from the form (a token can expand to
+    // more than one courseId, e.g. "Ethics" covers both a III and IV year course).
+    if (f.preferenceSource === 'submitted') assert.ok(f.preferences.length >= 1);
+    // Workload-fallback preferences are exactly what the Workload sheet shows
+    // them teaching - never a fabricated 5-item ranked list.
+    if (f.preferenceSource === 'workload') {
+      assert.ok(f.preferences.length >= 1);
+      const taughtNames = new Set(f.previousCourseIds);
+      for (const p of f.preferences) assert.ok(taughtNames.has(p.courseId), `${f.facultyId}: ${p.courseId} is not something they actually teach`);
+    }
   }
 });
 
-test('synthetic preferences are reproducible', () => {
+test('dataset build is reproducible (same files in, same faculty records out)', () => {
   const again = buildDataset({workloadPath: pick(/^Workload.*\.xlsx$/i), submissionsPath: pick(/^submissions.*\.xlsx$/i)});
   assert.deepEqual(again.faculty.map(f => f.preferences), data.faculty.map(f => f.preferences));
 });
@@ -49,9 +56,12 @@ test('mandatory courses have the real section counts: 26 (1st yr), 19 (2nd), 22 
   }
 });
 
-test('quotas by designation: Professor 1, Associate 2, everyone else 3', () => {
+test('quotas by designation: Professor 1, Associate 2, Contract Faculty (Limited Load) 2, everyone else 3', () => {
   for (const f of data.faculty) {
-    const want = f.designation === 'Professor' ? 1 : f.designation === 'Associate Professor' ? 2 : 3;
+    const want = f.designation === 'Professor' ? 1
+      : f.designation === 'Associate Professor' ? 2
+      : f.designation === 'Contract Faculty (Limited Load)' ? 2
+      : 3;
     assert.equal(f.courseQuota, want, f.designation);
   }
 });

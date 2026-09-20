@@ -144,6 +144,10 @@ export default function Courses(){
       <span className="flex gap-1.5 items-center"><BookOpen size={14}/> Theory {c.theoryHours||0}h</span>
       <span className="flex gap-1.5 items-center"><Clock3 size={14}/> Lab {c.labHours||0}h</span>
      </div>
+     {c.officialLeadFacultyName&&<div className="mt-3 flex items-center justify-between gap-2 text-xs">
+      <span className="text-slate-500">Dept. designated coordinator</span>
+      {c.officialLeadFacultyId?<span className="font-semibold text-slate-700">{facultyName(c.officialLeadFacultyId)}</span>:<span className="font-semibold text-amber-600" title="Listed on the Lead Faculty sheet but couldn't be matched to a faculty record - please verify manually">{c.officialLeadFacultyName} (unmatched)</span>}
+     </div>}
      {top?<div className="mt-3 p-3 rounded-xl border border-amber-200 bg-amber-50/70">
       <div className="flex items-center justify-between gap-2">
        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700"><Trophy size={13}/> Top faculty · {topSectionLabel}</div>

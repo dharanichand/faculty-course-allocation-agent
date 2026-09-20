@@ -192,9 +192,13 @@ r.get('/dashboard',auth,async(req,res)=>{
  try{
   const [report,cs,ps]=await Promise.all([buildWorkloadReport(),allCourses(),pendingAllocations()]);
   // Average assigned hours per designation - a readable chart for 100+ faculty.
+  // Ordered by real seniority (as the Faculty WL sheet's own designation
+  // categories rank), not by whatever order faculty happen to load in.
+  const DESIGNATION_ORDER=['Professor','Associate Professor','Assistant Professor','Assistant Professor (Contract)','Contract Faculty (Limited Load)','Teaching Associate'];
+  const rankOf=name=>{const i=DESIGNATION_ORDER.indexOf(name);return i===-1?DESIGNATION_ORDER.length:i};
   const groups=new Map();
   for(const f of report){const k=f.designation||'Other';const g=groups.get(k)||{name:k,total:0,n:0,max:f.prescribedMax};g.total+=f.assignedHours;g.n++;groups.set(k,g)}
-  const workload=[...groups.values()].map(g=>({name:g.name.replace('Assistant Professor','Asst. Prof.').replace('Associate Professor','Assoc. Prof.'),hours:Math.round(g.total/g.n*10)/10,max:g.max}));
+  const workload=[...groups.values()].sort((a,b)=>rankOf(a.name)-rankOf(b.name)||a.name.localeCompare(b.name)).map(g=>({name:g.name.replace('Assistant Professor','Asst. Prof.').replace('Associate Professor','Assoc. Prof.'),hours:Math.round(g.total/g.n*10)/10,max:g.max}));
   const conflicts=await pendingConflicts();
   const requestsCount=await Allocation.countDocuments({});
   const pending=(await enrichAllocations(ps.slice(0,8)));

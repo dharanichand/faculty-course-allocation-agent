@@ -17,7 +17,9 @@ const schema=new mongoose.Schema({facultyId:{type:String,unique:true},employeeNo
  // priorityTier: 1 Professor, 2 Associate Professor, 3 Assistant Professor, 4 others.
  // courseQuota: how many courses the auto-allocator may give this person.
  // prescribedMin/Max: weekly teaching hours the workload sheet prescribes.
- // preferenceSource: 'submitted' (from the form) or 'synthetic' (oversampled).
+ // preferenceSource: 'submitted' (from the form), 'workload' (no submission -
+ // fell back to what the Workload sheet shows them actually teaching), or
+ // 'none' (no submission and no workload assignment to fall back to).
  mobile:String,designationRaw:String,additionalDuties:String,priorityTier:{type:Number,default:4},courseQuota:{type:Number,default:3},prescribedMin:{type:Number,default:16},prescribedMax:{type:Number,default:18},minWorkload:{type:Number,default:16},previousCourseIds:[String],preferenceSource:{type:String,default:'submitted'},submittedAt:String,inWorkloadSheet:Boolean,inSubmissionsSheet:Boolean},{timestamps:true});
 // Narrows the department/status filter used by every list/dashboard query.
 schema.index({department:1,status:1});
