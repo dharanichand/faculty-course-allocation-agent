@@ -20,7 +20,10 @@ const schema=new mongoose.Schema({facultyId:{type:String,unique:true},employeeNo
  // preferenceSource: 'submitted' (from the form), 'workload' (no submission -
  // fell back to what the Workload sheet shows them actually teaching), or
  // 'none' (no submission and no workload assignment to fall back to).
- mobile:String,designationRaw:String,additionalDuties:String,priorityTier:{type:Number,default:4},courseQuota:{type:Number,default:3},prescribedMin:{type:Number,default:16},prescribedMax:{type:Number,default:18},minWorkload:{type:Number,default:16},previousCourseIds:[String],preferenceSource:{type:String,default:'submitted'},submittedAt:String,inWorkloadSheet:Boolean,inSubmissionsSheet:Boolean},{timestamps:true});
+ mobile:String,designationRaw:String,additionalDuties:String,priorityTier:{type:Number,default:4},courseQuota:{type:Number,default:3},prescribedMin:{type:Number,default:16},prescribedMax:{type:Number,default:18},minWorkload:{type:Number,default:16},previousCourseIds:[String],preferenceSource:{type:String,default:'submitted'},submittedAt:String,inWorkloadSheet:Boolean,inSubmissionsSheet:Boolean,
+ // submissionEmployeeNo: the number this person typed on the preference form (differs from facultyId for some people).
+ // sheet*: values exactly as printed in the Workload sheet, kept for traceability / cross-checking.
+ submissionEmployeeNo:String,sheetSlNo:Number,sheetRow:Number,sheetPrescribed:String,sheetWorkload:Number,sheetComment:String},{timestamps:true});
 // Narrows the department/status filter used by every list/dashboard query.
 schema.index({department:1,status:1});
 // Single text index covering the fields keyword search actually matches on.

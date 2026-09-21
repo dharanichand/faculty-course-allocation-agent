@@ -25,12 +25,8 @@
 
 import {TIER_LABELS} from './designationPolicy.js';
 export {TIER_LABELS};
-const DEFAULT_QUOTA = {1: 1, 2: 2, 3: 3, 4: 3, 5: 2};
+const DEFAULT_QUOTA = {1: 1, 2: 2, 3: 3, 4: 3};
 const PREF_SCORE = [60, 50, 40, 30, 20];
-// Every priority tier that exists in the designation policy - built from
-// TIER_LABELS so a newly-added tier (e.g. the CAP-derived tier 5) is
-// automatically included here instead of silently skipped.
-const ALL_TIERS = Object.keys(TIER_LABELS).map(Number).sort((a, b) => a - b);
 
 const submittedMs = f => {
   const t = Date.parse(f.submittedAt || '');
@@ -123,11 +119,16 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
     const st = stateById.get(l.facultyId);
     const list = free.get(l.courseId);
     if (!st || !list) continue;
-    const idx = list.findIndex(s => s.allocSectionId === l.sectionId);
-    if (idx < 0) continue;
-    const [seat] = list.splice(idx, 1);
+    // Approved rows imported from the workload sheet carry the sheet's own section
+    // label ("7", "12,19,4,7", "EEE"), which need not equal a generated seat id. In
+    // that case the course's first free lead seat (else any seat) is used up instead,
+    // so a re-run never hands the same section to somebody else as well.
+    let idx = list.findIndex(s => s.allocSectionId === l.sectionId);
+    if (idx < 0) idx = list.findIndex(s => s.isLead);
+    if (idx < 0 && list.length) idx = 0;
+    const seat = idx >= 0 ? list.splice(idx, 1)[0] : {sectionId: l.sectionId, allocSectionId: l.sectionId, role: 'sole', isLead: false};
     quotaLeftTotal -= st.quotaLeft > 0 ? 1 : 0;
-    if (seat.isLead) { leadsFree.set(l.courseId, leadsFree.get(l.courseId) - 1); leadsFreeTotal -= 1; }
+    if (idx >= 0 && seat.isLead) { leadsFree.set(l.courseId, leadsFree.get(l.courseId) - 1); leadsFreeTotal -= 1; }
     st.assigned.push({courseId: l.courseId, sectionId: seat.allocSectionId, baseSectionId: seat.sectionId, role: seat.role, hours: hoursOf(courseMap.get(l.courseId)), source: 'locked', rank: null});
     st.courseIds.add(l.courseId);
     st.hours += hoursOf(courseMap.get(l.courseId));
@@ -140,7 +141,7 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
   // ---- 1. preference phase: strictly by priority tier ----
   const denials = new Map();             // courseId -> Map(facultyId -> best rank they wanted)
   const maxQuota = Math.max(0, ...states.map(s => s.quota));
-  for (const tier of ALL_TIERS) {
+  for (const tier of [1, 2, 3, 4]) {
     const group = states.filter(s => s.tier === tier);
     for (let round = 0; round < maxQuota; round++) {
       for (const st of group) {
@@ -202,7 +203,7 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
     return score;
   };
 
-  for (const tier of ALL_TIERS) {
+  for (const tier of [1, 2, 3, 4]) {
     const group = states.filter(s => s.tier === tier);
     for (let round = 0; round < maxQuota; round++) {
       for (const st of group) {
@@ -323,8 +324,8 @@ export function runAutoAllocation({faculty, courses, locked = [], blocked = []})
     const n = leadsFree.get(c.courseId) || 0;
     if (n > 0) uncovered.push({courseId: c.courseId, courseName: c.courseName, sectionsWithoutInstructor: n});
   }
-  const counts = {professor: 0, associate: 0, assistant: 0, other: 0, contractLimited: 0};
-  facultySummary.forEach(f => { counts[['professor', 'associate', 'assistant', 'other', 'contractLimited'][f.tier - 1]]++; });
+  const counts = {professor: 0, associate: 0, assistant: 0, other: 0};
+  facultySummary.forEach(f => { counts[['professor', 'associate', 'assistant', 'other'][f.tier - 1]]++; });
   const stats = {
     faculty: states.length,
     assignments: assignments.length,

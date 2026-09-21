@@ -1,25 +1,20 @@
-COLLEGE-ALIGNED LARGE SYNTHETIC DATASET
+REAL DEPARTMENT DATA - AY 2026-27, ODD SEMESTER (CSE)
 
-This is a larger privacy-safe dataset for the Faculty Course Allocation Agent.
+Files (keep exactly ONE workload file and ONE submissions file in this folder):
+  Workload_AY__2026-27_I_Sem_3_.xlsx  courses, faculty, and the assignments (sheet "Faculty WL")
+  submissions_2026-05-07.xlsx         faculty course-preference form responses
 
-Records:
-Faculty: 120
-Departments: 8
-Courses: 70
-Course versions: 210
-Faculty expertise: 889
-Batches: 32
-Sections: 96
-Course offerings: 300
-Faculty workloads: 120
-Allocation candidates: 1500
-Agent tools: 4
+Load into MongoDB:
+  cd server
+  npm run import:workload -- --dry    build + verify only, writes nothing
+  npm run import:workload             replace faculty/courses/allocations in MongoDB
+  npm run import:workload -- --status=recommended   store sheet assignments as "recommended" instead of "approved"
 
-The structure mirrors the college schema concepts: people.faculty and faculty_expertise,
-curriculum.course/course_version/batch/section, academics.course_offering,
-hr.faculty_workload and agentops.agent/agent_tool.
-
-faculty_allocation_candidates is a staging table for the current project UI; final approved
-records should map to academics.faculty_allocation.
-
-All names, emails and records are synthetic. IDs are UUIDs and relationships are internally consistent.
+Rules:
+  * Every "Faculty WL" course row becomes exactly one allocation (faculty, course, section, students, hours).
+    The import re-reads MongoDB afterwards and fails if anything differs from the workbook.
+  * People are matched across the two files by name as well as employee number.
+    The workload sheet's employee number is the facultyId.
+  * Faculty who submitted keep their submitted preferences; faculty who did not get their
+    currently assigned courses as preferences.
+  * Courses used in Faculty WL but missing from "List of Courses" are added (catalogSource != list-of-courses).

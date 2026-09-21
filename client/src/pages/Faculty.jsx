@@ -21,19 +21,19 @@ const LOAD_FILTERS=[
  {id:'underloaded',label:'Very low workload'},
  {id:'balanced',label:'Balanced'},
 ];
-const DESIGNATIONS=['Professor','Associate Professor','Assistant Professor','Assistant Professor (Contract)','Contract Faculty (Limited Load)','Teaching Associate'];
+const DESIGNATIONS=['Professor','Associate Professor','Assistant Professor','Assistant Professor (Contract)','CAP','Teaching Associate'];
 const STATUS={
  overloaded:{tone:'red',label:'Overloaded'},
  underloaded:{tone:'amber',label:'Very low workload'},
  balanced:{tone:'green',label:'Balanced'},
  on_leave:{tone:'slate',label:'On leave'},
 };
-const TIER_TONE={1:'red',2:'amber',3:'blue',4:'slate',5:'slate'};
+const TIER_TONE={1:'red',2:'amber',3:'blue',4:'slate'};
 
 function csvCell(v){return `"${String(v??'').replaceAll('"','""')}"`}
 function downloadFacultyCsv(rows,name='faculty_workload.csv'){
- const head=['Faculty ID','Name','Designation','Priority tier','Courses assigned','Course quota','Assigned hours/week','Prescribed min','Prescribed max','Workload status','Hours over max / under min','Years taught','Assigned courses'];
- const body=rows.map(x=>[x.facultyId,x.name,x.designation,x.tierLabel||x.priorityTier,x.assignedCount??0,x.courseQuota??'',x.assignedHours??0,x.prescribedMin??'',x.prescribedMax??'',(STATUS[x.workloadStatus]||{}).label||x.workloadStatus,x.hoursDelta||0,(x.yearGroups||[]).join('/'),(x.assignments||[]).map(a=>`${a.courseName} ${formatSection(a.year,a.sectionId)}${a.role==='co'?' (co)':''} [${a.hours}h]`).join('; ')]);
+ const head=['Faculty ID','Name','Designation','Priority tier','Courses assigned','Course quota','Assigned hours/week','Total stated in workload sheet','Prescribed min','Prescribed max','Workload status','Hours over max / under min','Years taught','Assigned courses'];
+ const body=rows.map(x=>[x.facultyId,x.name,x.designation,x.tierLabel||x.priorityTier,x.assignedCount??0,x.courseQuota??'',x.assignedHours??0,x.sheetWorkload??'',x.prescribedMin??'',x.prescribedMax??'',(STATUS[x.workloadStatus]||{}).label||x.workloadStatus,x.hoursDelta||0,(x.yearGroups||[]).join('/'),(x.assignments||[]).map(a=>`${a.courseName} ${formatSection(a.year,a.sectionId)}${a.role==='co'?' (co)':''} [${a.hours}h]`).join('; ')]);
  const csv=[head,...body].map(r=>r.map(csvCell).join(',')).join('\n');
  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
  const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);
@@ -115,12 +115,13 @@ export default function Faculty(){
        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2"><Badge tone={TIER_TONE[x.priorityTier]||'slate'}>{x.designation}</Badge>{x.preferenceSource==='workload'&&<Badge tone="slate">Preference: from workload (no submission)</Badge>}{x.preferenceSource==='none'&&<Badge tone="amber">No preference data</Badge>}</div>
-      <div className="mt-4 text-xs text-slate-500">Assigned courses ({x.assignedCount||0} of {x.courseQuota??'—'}){year!=='all'&&` · showing ${YEAR_TABS.find(t=>t.id===year)?.label}`}</div>
+      <div className="mt-4 text-xs text-slate-500">Assigned courses: {x.assignedCount||0} ({x.assignedRows||0} section assignment{(x.assignedRows||0)===1?'':'s'}){year!=='all'&&` · showing ${YEAR_TABS.find(t=>t.id===year)?.label}`}</div>
       <div className="mt-1 space-y-1">{(inYear||[]).map(a=><div key={a.allocationId} className="text-xs text-slate-700 flex justify-between gap-2"><span className="truncate">{a.courseName} <span className="text-slate-400">{formatSection(a.year,a.sectionId)}{a.role==='co'?' · co':''}</span></span><span className="text-slate-500 shrink-0">{a.hours}h{a.status==='approved'?' ✓':''}</span></div>)}{!(inYear||[]).length&&<div className="text-xs text-slate-400">No courses assigned yet</div>}</div>
       <div className="mt-3 flex flex-wrap gap-2 items-center justify-between">
        <div className="flex flex-wrap gap-2">
         <Badge tone={st.tone}>{x.assignedHours||0} h / {x.prescribedMin}–{x.prescribedMax} h</Badge>
         <Badge tone={st.tone}>{st.label}{x.workloadStatus==='overloaded'?` (+${x.hoursDelta} h)`:''}</Badge>
+        {x.sheetWorkload!=null&&x.sheetWorkload!==(x.assignedHours||0)&&<Badge tone="amber">Workload sheet states {x.sheetWorkload} h</Badge>}
         {x.onLeave&&<Badge tone="red">On leave{x.leaveReason?`: ${x.leaveReason}`:''}</Badge>}
         {!!x.adminLoadHours&&<Badge tone="amber">Admin load {x.adminLoadHours}h</Badge>}
        </div>

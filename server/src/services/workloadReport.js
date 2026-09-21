@@ -33,7 +33,8 @@ export async function buildWorkloadReport({includeInactive = false} = {}) {
       const c = courseById.get(a.courseId);
       return {
         allocationId: String(a._id), courseId: a.courseId, courseName: c?.courseName || a.courseName || a.courseId,
-        shortName: c?.shortName || '', sectionId: a.sectionId || '', role: a.role || '',
+        shortName: c?.shortName || '', sectionId: a.sectionId || '', sectionLabel: a.sectionLabel || '', role: a.role || '',
+        students: a.students ?? null, sheetRow: a.sheetRow ?? null,
         hours: Number(a.hours) || Number(c?.hoursPerSection) || 0, status: a.status,
         year: c?.year || a.courseYear || '', program: c?.program || '', yearGroup: yearGroupOf(c),
         preferenceRank: a.preferenceRank ?? null
@@ -46,13 +47,15 @@ export async function buildWorkloadReport({includeInactive = false} = {}) {
     return {
       ...f,
       tierLabel: TIER_LABELS[f.priorityTier] || 'Other faculty',
-      assignedCount: mine.length, assignedHours: hours,
+      // assignedCount = distinct COURSES (a faculty member with 3 sections of Machine
+      // Learning teaches one course); assignedRows = individual section assignments.
+      assignedCount: new Set(mine.map(a => a.courseId)).size, assignedRows: mine.length, assignedHours: hours,
       prescribedMin: min, prescribedMax: max,
       workloadStatus: status,
       belowPrescribedMin: !f.onLeave && min > 0 && hours < min,
       hoursDelta: hours > max ? hours - max : hours < min ? hours - min : 0,
       yearGroups: [...new Set(mine.map(a => a.yearGroup).filter(Boolean))].sort(),
-      assignments: mine.sort((a, b) => a.courseName.localeCompare(b.courseName) || a.sectionId.localeCompare(b.sectionId))
+      assignments: mine.sort((a, b) => a.courseName.localeCompare(b.courseName) || (a.sheetRow ?? 0) - (b.sheetRow ?? 0) || a.sectionId.localeCompare(b.sectionId))
     };
   });
 }

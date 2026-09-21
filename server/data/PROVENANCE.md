@@ -1,10 +1,7 @@
 # Dataset provenance
 
-The operational CSVs currently shipped with this application are synthetic development data aligned to the college-provided schema. They should not be presented as real college records.
+The spreadsheets in this folder are the department's real AY 2026-27 odd-semester workload sheet
+(dated 10-08-2026) and the faculty preference-form export (2026-05-07). They contain personal data
+(names, mobile numbers): do not publish them.
 
-For a real/anonymized research dataset, use a source with explicit provenance and licensing. Relevant public sources include:
-
-- SNE-TAP S1: real, fully anonymized semester scheduling data (lecturers, classes, courses, ratings, course preferences and time-slot availability): https://zenodo.org/records/21483615
-- TAWKs 2026: faculty workload study data: https://www.openicpsr.org/openicpsr/project/247763/version/V2/view
-
-When replacing the development CSVs, preserve the original source citation and license.
+The earlier synthetic development data has been removed.
